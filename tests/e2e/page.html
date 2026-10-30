@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Screen Select test page</title>
+    <style>
+      body { margin: 24px; font-family: Arial, sans-serif; background: #fff; color: #000; }
+      p { font-size: 30px; margin: 0 0 24px; width: fit-content; }
+      #bottom { position: fixed; bottom: 8px; left: 24px; margin: 0; }
+      video { display: block; width: 480px; height: 180px; margin-bottom: 16px; background: #000; }
+    </style>
+  </head>
+  <body>
+    <p id="english">Perception is the first step</p>
+    <p id="arabic" dir="rtl" lang="ar">مرحبا بالعالم الجميل</p>
+    <p id="bottom">Bottom edge words</p>
+    <video id="playing" muted></video>
+    <video id="paused" muted></video>
+    <script>
+      window.keysSeen = [];
+      document.addEventListener('keydown', (event) => window.keysSeen.push(event.key));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 960;
+      canvas.height = 360;
+      const context = canvas.getContext('2d');
+      function draw() {
+        context.fillStyle = '#000';
+        context.fillRect(0, 0, 960, 360);
+        context.fillStyle = '#fff';
+        context.font = '64px Arial';
+        context.fillText('Moving picture words', 60, 200);
+      }
+      draw();
+      setInterval(draw, 100);
+
+      const stream = canvas.captureStream(10);
+      const playing = document.getElementById('playing');
+      playing.srcObject = stream;
+      playing.play();
+
+      const paused = document.getElementById('paused');
+      paused.srcObject = stream.clone();
+    </script>
+  </body>
+</html>

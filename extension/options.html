@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Screen Select settings</title>
+    <style>
+      body { margin: 24px; font: 15px/1.5 system-ui, sans-serif; }
+      fieldset { max-width: 320px; border: 1px solid #8888; border-radius: 8px; }
+      label { display: block; padding: 4px 0; }
+    </style>
+  </head>
+  <body>
+    <h1>Screen Select</h1>
+    <fieldset>
+      <legend>The Ask button opens</legend>
+      <label><input type="radio" name="askTarget" value="claude" /> Claude</label>
+      <label><input type="radio" name="askTarget" value="chatgpt" /> ChatGPT</label>
+    </fieldset>
+    <script src="options.js"></script>
+  </body>
+</html>

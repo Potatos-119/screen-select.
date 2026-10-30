@@ -1,0 +1,17 @@
+{
+  "name": "screen-select",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "vendor": "node scripts/vendor.mjs",
+    "test": "node --test \"tests/*.test.mjs\"",
+    "e2e": "node tests/e2e/run.mjs"
+  },
+  "devDependencies": {
+    "@tesseract.js-data/ara": "1.0.0",
+    "@tesseract.js-data/eng": "1.0.0",
+    "puppeteer-core": "24.10.0",
+    "tesseract.js": "7.0.0",
+    "tesseract.js-core": "7.0.0"
+  }
+}
