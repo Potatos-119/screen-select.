@@ -41,3 +41,19 @@ chrome.storage.sync.get({ briefModel: 'opus' }).then(({ briefModel }) => {
 modelRadios.forEach((radio) => {
   radio.addEventListener('change', () => chrome.storage.sync.set({ briefModel: radio.value }));
 });
+
+const themeRadios = document.querySelectorAll('input[name="theme"]');
+
+chrome.storage.sync.get({ theme: 'basic' }).then(({ theme }) => {
+  document.documentElement.dataset.theme = theme;
+  themeRadios.forEach((radio) => {
+    radio.checked = radio.value === theme;
+  });
+});
+
+themeRadios.forEach((radio) => {
+  radio.addEventListener('change', () => {
+    document.documentElement.dataset.theme = radio.value;
+    chrome.storage.sync.set({ theme: radio.value });
+  });
+});

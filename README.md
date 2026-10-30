@@ -30,6 +30,14 @@ Brief shows a short explanation of your selection in the panel, including diagra
 
 The key is stored only in this browser profile. Anyone with access to that profile could read it.
 
+## Looks
+
+Choose a look in the extension's settings:
+
+- **Basic:** clean and simple. This is the default, and it follows your light or dark mode.
+- **Print:** an instant print that develops while the text is read, with handwriting.
+- **Mac:** frosted glass, window buttons and a live selection size, in the style of macOS.
+
 ## Settings
 
 - **Shortcut:** change it at `brave://extensions/shortcuts`. If `Alt+Shift+S` does nothing, it may be taken by another extension, so set one there.

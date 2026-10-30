@@ -247,7 +247,110 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 1000));
   });
 
+  const setTheme = (theme) =>
+    sw.evaluate((value) => chrome.storage.sync.set({ theme: value }), theme);
+  const hostTheme = () =>
+    page.$eval('#screen-select-host', (host) => host.dataset.theme);
+  const isShown = (selector) =>
+    inShadow((root, target) => getComputedStyle(root.querySelector(target)).display !== 'none', selector);
+  const shot = async (name) => {
+    if (process.env.THEME_SHOTS) await page.screenshot({ path: `${process.env.THEME_SHOTS}/${name}.png` });
+  };
+
+  await check('Basic is the default look, with no photo or handwriting', async () => {
+    await sw.evaluate(() => chrome.storage.sync.remove('theme'));
+    await reset();
+    await activate();
+    assert.equal(await hostTheme(), 'basic');
+    await drag('#english');
+    assert.match(await panelText(), /Perception is the first step/);
+    assert.equal(await isShown('.photo'), false);
+    assert.equal(await isShown('.titlebar'), false);
+    assert.equal(await page.evaluate(() => [...document.fonts].some((f) => f.family.includes('Screen Select'))), false);
+    await shot('basic');
+    await page.keyboard.press('Escape');
+  });
+
+  await check('Mac shows a title bar and the selection size', async () => {
+    await setTheme('mac');
+    await reset();
+    await activate();
+    assert.equal(await hostTheme(), 'mac');
+    await page.mouse.move(40, 30);
+    await page.mouse.down();
+    await page.mouse.move(340, 130, { steps: 4 });
+    assert.equal(await isShown('.size'), true);
+    assert.match(await inShadow((root) => root.querySelector('.size').textContent), /300 × 100/);
+    await shot('mac-drag');
+    await page.mouse.up();
+    await panelText();
+    assert.equal(await isShown('.titlebar'), true);
+    assert.equal(await isShown('.photo'), false);
+    await shot('mac');
+  });
+
+  await check('the Mac close button closes the overlay', async () => {
+    await inShadow((root) => root.querySelector('.close').click());
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(await hostCount(), 0);
+  });
+
+  await check('the light versions keep their buttons on one row', async () => {
+    await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
+    for (const look of ['basic', 'mac']) {
+      await setTheme(look);
+      await reset();
+      await activate();
+      await drag('#english');
+      await panelText();
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      await shot(`${look}-light`);
+      const rows = await inShadow((root) => {
+        const tops = [...root.querySelectorAll('.actions button')].map((button) => button.getBoundingClientRect().top);
+        return new Set(tops).size;
+      });
+      assert.equal(rows, 1);
+      await page.keyboard.press('Escape');
+    }
+    await page.emulateMediaFeatures([]);
+  });
+
+  await check('Print keeps the photo and handwriting', async () => {
+    await setTheme('print');
+    await reset();
+    await activate();
+    assert.equal(await hostTheme(), 'print');
+    await drag('#english');
+    await panelText();
+    assert.equal(await isShown('.photo'), true);
+    await new Promise((resolve) => setTimeout(resolve, 1700));
+    await shot('print');
+    await page.keyboard.press('Escape');
+  });
+
+  await check('an unknown saved look falls back to Basic', async () => {
+    await setTheme('nope');
+    await reset();
+    await activate();
+    assert.equal(await hostTheme(), 'basic');
+    await page.keyboard.press('Escape');
+  });
+
+  await check('choosing a look in settings saves it', async () => {
+    const options = await browser.newPage();
+    await options.goto(`chrome-extension://${new URL(sw.url()).host}/options.html`);
+    await options.click('input[value="mac"]');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(await options.$eval('html', (html) => html.dataset.theme), 'mac');
+    if (process.env.THEME_SHOTS) await options.screenshot({ path: `${process.env.THEME_SHOTS}/options.png` });
+    await options.close();
+    assert.equal(await sw.evaluate(async () => (await chrome.storage.sync.get('theme')).theme), 'mac');
+    await sw.evaluate(() => chrome.storage.sync.remove('theme'));
+    await page.bringToFront();
+  });
+
   await check('the handwriting fonts load under a strict content security policy', async () => {
+    await setTheme('print');
     await reset();
     await activate();
     await page.waitForFunction(
@@ -260,6 +363,7 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 200));
     const left = await page.evaluate(() => [...document.fonts].filter((face) => face.family.includes('Screen Select')).length);
     assert.equal(left, 0);
+    await sw.evaluate(() => chrome.storage.sync.remove('theme'));
   });
 
   await check('a tiny drag keeps the overlay open without a panel', async () => {
