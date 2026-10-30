@@ -132,6 +132,25 @@ try {
     if (process.env.PANEL_SHOT) await page.screenshot({ path: process.env.PANEL_SHOT });
   });
 
+  await check('AI in a sans-serif font is read as AI and translated as a word', async () => {
+    await reset();
+    await activate();
+    await drag('#ai');
+    assert.match(await panelText(), /\bAI does the work/);
+    await clickButton('translate');
+    await page.waitForFunction(
+      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.translation').textContent,
+      { timeout: 15000 },
+    );
+    const text = await inShadow((root) => root.querySelector('.translation').textContent);
+    assert.match(text, /الذكاء الاصطناعي/);
+    assert.doesNotMatch(text, /آل/);
+    await reset();
+    await activate();
+    await drag('#english');
+    await panelText();
+  });
+
   await check('frame is drawn under a strict content security policy', async () => {
     const blank = await inShadow((root) => {
       const canvas = root.querySelector('.frame');

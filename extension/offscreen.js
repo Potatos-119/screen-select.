@@ -1,3 +1,4 @@
+import { fixMisreads } from './lib/ocr-fixes.js';
 import { arabicShare } from './lib/translate.js';
 
 const VENDOR = chrome.runtime.getURL('vendor/tesseract');
@@ -37,7 +38,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.target !== 'offscreen' || message.type !== 'recognize') return false;
 
   readText(message.dataUrl)
-    .then((text) => sendResponse({ text: text.trim() }))
+    .then((text) => sendResponse({ text: fixMisreads(text.trim()) }))
     .catch((error) => sendResponse({ error: String(error?.message ?? error) }));
   return true;
 });
