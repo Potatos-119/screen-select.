@@ -5,12 +5,30 @@
     <title>Screen Select settings</title>
     <style>
       body { margin: 24px; font: 15px/1.5 system-ui, sans-serif; }
-      fieldset { max-width: 320px; border: 1px solid #8888; border-radius: 8px; }
+      fieldset { max-width: 420px; margin-bottom: 16px; border: 1px solid #8888; border-radius: 8px; }
+      input[type='password'] { width: 100%; box-sizing: border-box; padding: 6px; }
+      button { margin-top: 8px; padding: 6px 12px; }
+      small { display: block; margin-top: 6px; }
       label { display: block; padding: 4px 0; }
     </style>
   </head>
   <body>
     <h1>Screen Select</h1>
+    <fieldset>
+      <legend>Claude API key for the Brief button</legend>
+      <input id="api-key" type="password" autocomplete="off" spellcheck="false" aria-label="Claude API key" />
+      <button id="save-key">Save key</button>
+      <small id="key-status" role="status"></small>
+      <small>
+        Create a key at console.anthropic.com. It is stored only in this browser profile. Your selection is sent to
+        Anthropic only when you press Brief.
+      </small>
+    </fieldset>
+    <fieldset>
+      <legend>The Brief button uses</legend>
+      <label><input type="radio" name="briefModel" value="opus" /> Claude Opus 5.5 (best answers)</label>
+      <label><input type="radio" name="briefModel" value="haiku" /> Claude Haiku 5.5 (much cheaper)</label>
+    </fieldset>
     <fieldset>
       <legend>The Ask button opens</legend>
       <label><input type="radio" name="askTarget" value="claude" /> Claude</label>

@@ -17,4 +17,9 @@ globalThis.ScreenSelectCrop = {
   upscaleFactor(height) {
     return height < 300 ? 2 : 1;
   },
+
+  fitWithin(width, height, maxEdge) {
+    const scale = Math.min(1, maxEdge / Math.max(width, height));
+    return { width: Math.round(width * scale), height: Math.round(height * scale) };
+  },
 };

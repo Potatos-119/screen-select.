@@ -1,5 +1,6 @@
 globalThis.__screenSelectStart = async (dataUrl) => {
-  const { toImageRect, isUsableDrag, upscaleFactor } = globalThis.ScreenSelectCrop;
+  const { toImageRect, isUsableDrag, upscaleFactor, fitWithin } = globalThis.ScreenSelectCrop;
+  const BRIEF_IMAGE_MAX_EDGE = 1568;
 
   const STYLE = `
     * { box-sizing: border-box; }
@@ -14,7 +15,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.4);
     }
     .panel {
-      position: fixed; width: 430px; max-width: calc(100vw - 32px); max-height: calc(100vh - 16px);
+      position: fixed; width: 500px; max-width: calc(100vw - 32px); max-height: calc(100vh - 16px);
       overflow: auto; padding: 12px;
       display: grid; gap: 8px; border-radius: 10px; background: #16181f; color: #f2f3f5;
       border: 1px solid #343845; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
@@ -25,11 +26,11 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       width: 100%; min-height: 96px; max-height: 40vh; padding: 8px; resize: vertical;
       border: 1px solid #343845; border-radius: 6px; background: #0f1116; color: inherit; font: inherit;
     }
-    .translation {
+    .translation, .brief {
       max-height: 30vh; overflow: auto; padding: 8px; border-radius: 6px; background: #20242f;
       white-space: pre-wrap; user-select: text;
     }
-    .translation:empty { display: none; }
+    .translation:empty, .brief:empty { display: none; }
     .actions { display: flex; flex-wrap: wrap; gap: 6px; }
     button {
       padding: 6px 10px; border: 1px solid #343845; border-radius: 6px; background: #252936;
@@ -64,10 +65,12 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     <div class="panel" hidden>
       <textarea class="text" dir="auto" spellcheck="false" aria-label="Text from your selection"></textarea>
       <div class="translation" dir="auto"></div>
+      <div class="brief" dir="auto"></div>
       <div class="actions">
         <button data-action="copy">Copy</button>
         <button data-action="copy-image">Copy image</button>
         <button data-action="translate">Translate</button>
+        <button data-action="brief">Brief</button>
         <button data-action="search">Search</button>
         <button data-action="ask">Ask</button>
       </div>
@@ -81,6 +84,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
   const panel = root.querySelector('.panel');
   const textArea = root.querySelector('.text');
   const translation = root.querySelector('.translation');
+  const brief = root.querySelector('.brief');
   const status = root.querySelector('.status');
   const buttons = [...root.querySelectorAll('button')];
 
@@ -184,6 +188,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     panel.dataset.state = 'reading';
     textArea.value = '';
     translation.textContent = '';
+    brief.textContent = '';
     setStatus('Reading...');
     placePanel(rect);
 
@@ -292,6 +297,27 @@ globalThis.__screenSelectStart = async (dataUrl) => {
         setStatus('');
       } else {
         setStatus('Translation failed here, so it opened in Google Translate.');
+      }
+    },
+
+    async brief() {
+      setStatus('Writing a brief...');
+      const size = fitWithin(cropCanvas.width, cropCanvas.height, BRIEF_IMAGE_MAX_EDGE);
+      const image = new OffscreenCanvas(size.width, size.height);
+      const context = image.getContext('2d');
+      context.imageSmoothingQuality = 'high';
+      context.drawImage(cropCanvas, 0, 0, size.width, size.height);
+
+      const result = await chrome.runtime.sendMessage({
+        type: 'ss-brief',
+        text: textArea.value.trim(),
+        imageDataUrl: await toDataUrl(image),
+      });
+      if (result?.brief) {
+        brief.textContent = result.brief;
+        setStatus('');
+      } else {
+        setStatus(result?.error ?? 'Could not get a brief. Try again.');
       }
     },
 

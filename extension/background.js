@@ -1,3 +1,4 @@
+import { buildBriefRequest, describeBriefError, parseBriefResponse } from './lib/brief.js';
 import { buildTranslateUrl, fallbackUrl, parseTranslateResponse, targetLang } from './lib/translate.js';
 
 const ASK_URLS = {
@@ -40,6 +41,26 @@ async function translate(text) {
     await chrome.tabs.create({ url: fallbackUrl(text, target) });
     return { fallbackOpened: true };
   }
+}
+
+async function brief(text, imageDataUrl) {
+  const { apiKey } = await chrome.storage.local.get('apiKey');
+  if (!apiKey) {
+    await chrome.runtime.openOptionsPage();
+    return { error: 'Add your Claude API key in the settings tab that just opened, then press Brief again.' };
+  }
+  const { briefModel } = await chrome.storage.sync.get({ briefModel: 'opus' });
+  const { url, init } = buildBriefRequest({ apiKey, model: briefModel, text, imageDataUrl });
+
+  let response;
+  try {
+    response = await fetch(url, init);
+  } catch {
+    return { error: 'Could not reach Claude. Check your connection and try again.' };
+  }
+  const json = await response.json().catch(() => null);
+  if (!response.ok) return { error: describeBriefError(response.status, json) };
+  return { brief: parseBriefResponse(json) };
 }
 
 async function ask() {
@@ -101,6 +122,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const handlers = {
     'ss-recognize': () => recognize(message.dataUrl),
     'ss-translate': () => translate(message.text),
+    'ss-brief': () => brief(message.text, message.imageDataUrl),
     'ss-search': () => chrome.search.query({ text: message.text, disposition: 'NEW_TAB' }),
     'ss-ask': ask,
   };

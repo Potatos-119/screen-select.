@@ -336,6 +336,89 @@ try {
     });
   });
 
+  const stubBrief = (status, body) =>
+    sw.evaluate(
+      (code, json) => {
+        globalThis.__realFetch ??= globalThis.fetch;
+        globalThis.__briefCalls = [];
+        globalThis.fetch = async (url, init) => {
+          globalThis.__briefCalls.push({ url, init });
+          return new Response(json, { status: code });
+        };
+      },
+      status,
+      JSON.stringify(body),
+    );
+  const clearKey = () => sw.evaluate(() => chrome.storage.local.remove('apiKey'));
+
+  await check('Brief without a key opens settings and says why', async () => {
+    await clearKey();
+    await reset();
+    await activate();
+    await drag('#english');
+    await panelText();
+    await clickButton('brief');
+    const target = await waitForTab(`chrome-extension://${new URL(sw.url()).host}/options.html`);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.match(await status(), /API key/);
+    await (await target.page())?.close();
+    await page.bringToFront();
+  });
+
+  await check('the key saved in settings is used, and Brief shows the answer', async () => {
+    const options = await browser.newPage();
+    await options.goto(`chrome-extension://${new URL(sw.url()).host}/options.html`);
+    await options.type('#api-key', 'test-key');
+    await options.click('#save-key');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(await options.$eval('#api-key', (input) => input.type), 'password');
+    await options.close();
+    await page.bringToFront();
+
+    await stubBrief(200, {
+      stop_reason: 'end_turn',
+      content: [{ type: 'text', text: 'A short brief.' }],
+    });
+    await clickButton('brief');
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    assert.equal(
+      await inShadow((root) => root.querySelector('.brief').textContent),
+      'A short brief.',
+    );
+    const call = await sw.evaluate(() => globalThis.__briefCalls[0]);
+    assert.equal(call.url, 'https://api.anthropic.com/v1/messages');
+    assert.equal(call.init.headers['x-api-key'], 'test-key');
+    const body = JSON.parse(call.init.body);
+    assert.equal(body.messages[0].content[0].type, 'image');
+    assert.match(body.messages[0].content[1].text, /Perception is the first step/);
+  });
+
+  await check('a wrong key shows a clear message', async () => {
+    await stubBrief(401, { error: { message: 'invalid x-api-key' } });
+    await clickButton('brief');
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    assert.match(await status(), /key/i);
+  });
+
+  await check('choosing Haiku changes the model', async () => {
+    const options = await browser.newPage();
+    await options.goto(`chrome-extension://${new URL(sw.url()).host}/options.html`);
+    await options.click('input[value="haiku"]');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await options.close();
+    await page.bringToFront();
+    await stubBrief(200, { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Short.' }] });
+    await clickButton('brief');
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const call = await sw.evaluate(() => globalThis.__briefCalls[0]);
+    assert.equal(JSON.parse(call.init.body).model, 'claude-haiku-5-5');
+    await sw.evaluate(() => {
+      globalThis.fetch = globalThis.__realFetch;
+    });
+    await clearKey();
+    await page.keyboard.press('Escape');
+  });
+
   await check('Ask opens ChatGPT after changing the option', async () => {
     const options = await browser.newPage();
     await options.goto(`chrome-extension://${new URL(sw.url()).host}/options.html`);

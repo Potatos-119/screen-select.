@@ -9,3 +9,35 @@ chrome.storage.sync.get({ askTarget: 'claude' }).then(({ askTarget }) => {
 radios.forEach((radio) => {
   radio.addEventListener('change', () => chrome.storage.sync.set({ askTarget: radio.value }));
 });
+
+const keyInput = document.getElementById('api-key');
+const keyStatus = document.getElementById('key-status');
+const modelRadios = document.querySelectorAll('input[name="briefModel"]');
+
+function showKeyState(hasKey) {
+  keyInput.value = '';
+  keyInput.placeholder = hasKey ? 'A key is saved. Paste a new one to replace it.' : 'Paste your API key';
+}
+
+chrome.storage.local.get('apiKey').then(({ apiKey }) => showKeyState(Boolean(apiKey)));
+
+document.getElementById('save-key').addEventListener('click', async () => {
+  const apiKey = keyInput.value.trim();
+  if (!apiKey) {
+    keyStatus.textContent = 'Paste a key first.';
+    return;
+  }
+  await chrome.storage.local.set({ apiKey });
+  showKeyState(true);
+  keyStatus.textContent = 'Saved.';
+});
+
+chrome.storage.sync.get({ briefModel: 'opus' }).then(({ briefModel }) => {
+  modelRadios.forEach((radio) => {
+    radio.checked = radio.value === briefModel;
+  });
+});
+
+modelRadios.forEach((radio) => {
+  radio.addEventListener('change', () => chrome.storage.sync.set({ briefModel: radio.value }));
+});

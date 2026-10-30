@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../extension/lib/crop.js';
 
-const { toImageRect, isUsableDrag, upscaleFactor } = globalThis.ScreenSelectCrop;
+const { toImageRect, isUsableDrag, upscaleFactor, fitWithin } = globalThis.ScreenSelectCrop;
 
 test('maps a rect at 2x', () =>
   assert.deepEqual(toImageRect({ x: 10, y: 20, width: 30, height: 40 }, 100, 100, 200, 200), {
@@ -36,4 +36,10 @@ test('rejects tiny drags', () => {
 test('upscales short crops only', () => {
   assert.equal(upscaleFactor(100), 2);
   assert.equal(upscaleFactor(800), 1);
+});
+
+test('shrinks only images over the size limit', () => {
+  assert.deepEqual(fitWithin(800, 600, 1568), { width: 800, height: 600 });
+  assert.deepEqual(fitWithin(3136, 1000, 1568), { width: 1568, height: 500 });
+  assert.deepEqual(fitWithin(1000, 3136, 1568), { width: 500, height: 1568 });
 });
