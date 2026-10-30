@@ -1,73 +1,75 @@
 # Screen Select
 
-Select text from anything on screen in Brave, even inside a video, then copy, translate, search or ask AI.
+Drag a box over anything in a browser tab, even a video, and get the text out of it. Then copy it, translate it, search it or ask AI about it. It's made for Chrome and Brave.
 
 ## Install
 
-You don't need Git, npm or the Terminal.
+You can do this without Git, npm or the Terminal.
 
 1. On this GitHub page, click the green **Code** button, then **Download ZIP**.
 2. Unzip it and move the folder somewhere permanent, such as Documents.
-3. Open `brave://extensions` in Brave and turn on **Developer mode** (top right).
+3. Open `chrome://extensions` in your browser and turn on **Developer mode** (top right). Brave accepts this address too.
 4. Click **Load unpacked** and choose the `extension` folder inside it.
-5. Optional: click the puzzle icon in the toolbar and pin Screen Select.
+5. To keep it handy, click the puzzle icon in the toolbar and pin Screen Select.
 
-Keep the folder where it is. Brave loads the extension from there each time.
+Leave the folder where it is, because the browser loads the extension from there every time it starts.
 
-**To update:** download it again, replace the folder, then press the reload icon on Screen Select in `brave://extensions`.
+To update, download it again, replace the folder, then press the reload icon on Screen Select in `chrome://extensions`.
 
 ## Use
 
 1. Press `Alt+Shift+S` (Option+Shift+S on a Mac) or click the icon.
 2. Drag a box over what you want. `Esc` cancels.
-3. Use the panel: Copy, Copy image, Translate, Brief, Search or Ask.
+3. Pick something from the panel: Copy, Copy image, Translate, Brief, Search or Ask.
 
-The text in the panel is real text, so you can fix it, select part of it and right-click it.
+The panel holds real text, so you can fix mistakes, select part of it and right-click it.
 
-Translation goes both ways by itself: Arabic to English, anything else to Arabic.
+Translate picks the direction for you: Arabic goes to English, and everything else goes to Arabic. If your selection has both Arabic and English, it asks which one you want first.
 
 ## Brief
 
-Brief gives you a short explanation of your selection. Choose how it works under Details, Extension options.
+Brief explains your selection in a few sentences. You choose who writes it under Details, then Extension options.
 
 | Option | Cost | Where the answer appears |
 |---|---|---|
-| **NVIDIA DeepSeek** (default) | Free trial with limited credits | In the panel |
-| **Claude Opus or Haiku** | Paid per use, separate from a Claude chat plan | In the panel |
-| **No key** | Free, uses your chat plan | In your chat, after you paste and send |
+| NVIDIA DeepSeek (default) | Free trial with limited credits | In the panel |
+| Claude Opus or Haiku | Paid per use, separate from a Claude chat plan | In the panel |
 
-**Free setup with NVIDIA:**
+Both options need an API key. If yours is missing, the panel asks what you want to do: add a key, or copy a request and open your chat.
 
-1. Create a free account at [build.nvidia.com](https://build.nvidia.com) and generate an API key.
+To set up the free option:
+
+1. Create an account at [build.nvidia.com](https://build.nvidia.com) and generate an API key.
 2. Open the extension's Details page, then Extension options.
 3. Paste the key under **Your NVIDIA API key** and click **Save NVIDIA key**.
 
-Keys are stored only in this browser profile, and anyone with access to that profile could read them. Your selection is sent to the service you chose, and only when you press Brief.
+Keys stay in this browser profile, so anyone who can open that profile could read them.
 
 ## Looks
 
-The first time you use it, a small window asks you to choose a look. Change it any time with the **Look** button in the panel, or in the extension's settings.
+The first time you use it, a small window asks you to choose a look. You can change it later with the **Look** button in the panel or in the extension's settings.
 
-- **Windows:** the default, following Microsoft's Fluent design.
-- **Mac:** frosted glass, window buttons and a live selection size, in the style of macOS.
-- **Linux:** a clean header bar in the style of GNOME's Adwaita.
-- **Print:** an instant print that develops while the text is read, with handwriting.
+Windows is the default and follows Microsoft's Fluent design. Mac has frosted glass, window buttons and a live selection size. Linux has a clean header bar in the style of GNOME's Adwaita. Print turns your selection into an instant photo that develops while the text is read, with handwritten notes.
 
-Windows, Mac and Linux follow your light or dark mode. They use their real system fonts where those are installed, and your computer's default font otherwise.
+Windows, Mac and Linux follow your light or dark mode. They use the real system fonts when you have them, and your computer's default font when you don't.
 
 ## Settings
 
-- **Shortcut:** change it at `brave://extensions/shortcuts`. If `Alt+Shift+S` does nothing, it may be taken by another extension, so set one there.
-- **Ask and Brief:** open the extension's Details page, then Extension options, to switch Ask between Claude and ChatGPT, and Brief between Opus and Haiku.
+Change the shortcut at `chrome://extensions/shortcuts`. If `Alt+Shift+S` does nothing, another extension may have taken it, and you can set a new one there.
+
+Extension options is also where you switch Ask between Claude and ChatGPT.
 
 ## Limits
 
-- Protected streaming sites such as Netflix show as a black picture, so no text can be read there.
-- Brave blocks extensions on its own pages and the Chrome Web Store. The icon shows `!` there.
-- Blurry, tiny or stylised text can be misread, and Arabic more often than English. Fix it in the panel.
+- Protected streaming sites such as Netflix show up as a black picture, so there's no text to read.
+- Browsers block extensions on their own pages and on the Chrome Web Store. The icon shows `!` there.
+- Blurry, tiny or stylised text can be misread, Arabic more often than English. You can fix it in the panel.
 - Copy image needs an `https` page.
 - Videos embedded from another site may keep playing while you select.
-- Translate sends the panel text to Google, and Brief sends your selection to the AI service you chose, only when you press them. Everything else stays on your computer.
+
+## Privacy
+
+Translate sends the panel text to Google. Brief sends your selection, including the picture, to the service you chose. Both happen only when you press the button. Everything else stays on your computer.
 
 ## Fonts
 
@@ -81,3 +83,5 @@ npm run vendor
 npm test
 npm run e2e
 ```
+
+`npm run e2e` drives Brave. To use another browser, set `BROWSER_PATH` to its executable.

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   keyNameFor,
+  providerFor,
   buildBriefRequest,
   parseBriefResponse,
   describeBriefError,
@@ -152,6 +153,11 @@ test('each provider keeps its own key', () => {
   assert.equal(keyNameFor('opus'), 'apiKey');
   assert.equal(keyNameFor('haiku'), 'apiKey');
   assert.equal(keyNameFor(undefined), 'nvidiaKey');
+});
+
+test('names the provider that needs a key', () => {
+  assert.equal(providerFor(undefined), 'NVIDIA');
+  assert.equal(providerFor('haiku'), 'Claude');
 });
 
 test('the extension may reach NVIDIA', () => {

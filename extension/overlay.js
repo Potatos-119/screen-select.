@@ -102,7 +102,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       font: 500 13px/1.3 var(--ui-font); box-shadow: var(--panel-shadow); pointer-events: none;
       backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
     }
-    .hint[hidden], .box[hidden], .size[hidden], .panel[hidden] { display: none; }
+    .hint[hidden], .box[hidden], .size[hidden], .panel[hidden], .choices[hidden] { display: none; }
     .box { position: fixed; pointer-events: none; border: 2px solid var(--accent); border-radius: 2px; }
     .size { display: none; }
     .photo, .flash { display: none; }
@@ -151,6 +151,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     }
     .actions button:hover { background: var(--well); }
     .actions [data-action='look'] { margin-left: auto; }
+    .choices span { width: 100%; color: var(--muted); font-size: 13px; }
     .actions [data-action='brief'] { border-color: transparent; background: var(--accent); color: var(--on-accent); }
     .actions [data-action='brief']:hover { background: var(--accent); filter: brightness(1.08); }
     button:focus-visible, .text:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -345,6 +346,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       <textarea class="text" dir="auto" spellcheck="false" aria-label="Text from your selection"></textarea>
       <div class="translation" dir="auto"></div>
       <div class="brief" dir="auto"></div>
+      <div class="actions choices" hidden></div>
       <div class="actions">
         <button data-action="copy">Copy</button>
         <button data-action="copy-image">Copy image</button>
@@ -383,6 +385,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
   const textArea = root.querySelector('.text');
   const translation = root.querySelector('.translation');
   const brief = root.querySelector('.brief');
+  const choices = root.querySelector('.choices');
   const status = root.querySelector('.status');
   const buttons = [...root.querySelectorAll('[data-action]')];
   const picker = root.querySelector('.picker');
@@ -529,6 +532,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     textArea.value = '';
     translation.textContent = '';
     brief.textContent = '';
+    choices.hidden = true;
     setStatus(theme === 'print' ? 'Developing the text...' : 'Reading the text...');
     placePanel(rect);
 
@@ -622,6 +626,44 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     }
   }
 
+  function showChoices(question, options) {
+    const label = document.createElement('span');
+    label.textContent = question;
+    const optionButtons = options.map(([name, run]) => {
+      const button = document.createElement('button');
+      button.textContent = name;
+      button.addEventListener('click', () => runAction(button, run));
+      return button;
+    });
+    choices.replaceChildren(label, ...optionButtons);
+    choices.hidden = false;
+  }
+
+  async function translateText(target) {
+    const text = textArea.value.trim();
+    if (!text) return setStatus('There is no text to translate.');
+    setStatus('Translating...');
+    const result = await chrome.runtime.sendMessage({ type: 'ss-translate', text, target });
+    if (result?.twoLanguages) {
+      setStatus('');
+      showChoices('This text has two languages. Translate it to:', [
+        ['English', () => translateText('en')],
+        ['Arabic', () => translateText('ar')],
+      ]);
+    } else if (result?.translation) {
+      translation.textContent = result.translation;
+      setStatus('');
+    } else {
+      setStatus('Translation failed here, so it opened in Google Translate.');
+    }
+  }
+
+  async function briefInChat(requestText) {
+    const copied = requestText ? await copyText(requestText) : await copyImage();
+    setStatus(copied ? 'Copied. Paste it into the chat to get your brief.' : 'Could not copy. Copy it by hand first.');
+    await chrome.runtime.sendMessage({ type: 'ss-ask' });
+  }
+
   const actions = {
     async copy() {
       if (await copyText(textArea.value)) {
@@ -637,19 +679,12 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     },
 
     async translate() {
-      const text = textArea.value.trim();
-      if (!text) return setStatus('There is no text to translate.');
-      setStatus('Translating...');
-      const result = await chrome.runtime.sendMessage({ type: 'ss-translate', text });
-      if (result?.translation) {
-        translation.textContent = result.translation;
-        setStatus('');
-      } else {
-        setStatus('Translation failed here, so it opened in Google Translate.');
-      }
+      choices.hidden = true;
+      await translateText();
     },
 
     async brief() {
+      choices.hidden = true;
       setStatus('Writing a brief...');
       const size = fitWithin(cropCanvas.width, cropCanvas.height, BRIEF_IMAGE_MAX_EDGE);
       const image = new OffscreenCanvas(size.width, size.height);
@@ -663,9 +698,11 @@ globalThis.__screenSelectStart = async (dataUrl) => {
         imageDataUrl: await toDataUrl(image, 'image/jpeg', BRIEF_IMAGE_QUALITY),
       });
       if (result?.noKey) {
-        const copied = result.requestText ? await copyText(result.requestText) : await copyImage();
-        setStatus(copied ? 'Copied. Paste it into the chat to get your brief.' : 'Could not copy. Copy it by hand first.');
-        await chrome.runtime.sendMessage({ type: 'ss-ask' });
+        setStatus('');
+        showChoices(`Brief uses ${result.provider}, but no ${result.provider} key is saved.`, [
+          ['Add a key', () => chrome.runtime.sendMessage({ type: 'ss-settings' })],
+          ['Use my chat instead', () => briefInChat(result.requestText)],
+        ]);
       } else if (result?.brief) {
         brief.textContent = result.brief;
         setStatus('');
@@ -724,16 +761,18 @@ globalThis.__screenSelectStart = async (dataUrl) => {
   root.querySelector('.close').addEventListener('click', close);
   if (!saved.lookChosen) openPicker();
 
+  async function runAction(button, run) {
+    button.disabled = true;
+    try {
+      await run();
+    } catch (error) {
+      setStatus(`Something went wrong: ${error?.message ?? error}`);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   buttons.forEach((button) => {
-    button.addEventListener('click', async () => {
-      button.disabled = true;
-      try {
-        await actions[button.dataset.action]();
-      } catch (error) {
-        setStatus(`Something went wrong: ${error?.message ?? error}`);
-      } finally {
-        button.disabled = false;
-      }
-    });
+    button.addEventListener('click', () => runAction(button, actions[button.dataset.action]));
   });
 };

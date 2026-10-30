@@ -4,8 +4,16 @@ import {
   describeBriefError,
   keyNameFor,
   parseBriefResponse,
+  providerFor,
 } from './lib/brief.js';
-import { buildTranslateUrl, fallbackUrl, parseTranslateResponse, targetLang } from './lib/translate.js';
+import {
+  buildTranslateUrl,
+  fallbackUrl,
+  hasTwoLanguages,
+  parseTranslateResponse,
+  sourceLang,
+  targetLang,
+} from './lib/translate.js';
 
 const ASK_URLS = {
   claude: 'https://claude.ai/new',
@@ -37,14 +45,16 @@ async function recognize(dataUrl) {
   return chrome.runtime.sendMessage({ target: 'offscreen', type: 'recognize', dataUrl });
 }
 
-async function translate(text) {
-  const target = targetLang(text);
+async function translate(text, chosenTarget) {
+  if (!chosenTarget && hasTwoLanguages(text)) return { twoLanguages: true };
+  const target = chosenTarget ?? targetLang(text);
+  const source = chosenTarget ? sourceLang(target) : 'auto';
   try {
-    const response = await fetch(buildTranslateUrl(text, target));
+    const response = await fetch(buildTranslateUrl(text, target, source));
     if (!response.ok) throw new Error(`Translate returned ${response.status}`);
     return { translation: parseTranslateResponse(await response.json()) };
   } catch {
-    await chrome.tabs.create({ url: fallbackUrl(text, target) });
+    await chrome.tabs.create({ url: fallbackUrl(text, target, source) });
     return { fallbackOpened: true };
   }
 }
@@ -53,7 +63,9 @@ async function brief(text, imageDataUrl) {
   const { briefModel } = await chrome.storage.sync.get('briefModel');
   const keyName = keyNameFor(briefModel);
   const { [keyName]: apiKey } = await chrome.storage.local.get(keyName);
-  if (!apiKey) return { noKey: true, requestText: text ? briefRequestText(text) : '' };
+  if (!apiKey) {
+    return { noKey: true, provider: providerFor(briefModel), requestText: text ? briefRequestText(text) : '' };
+  }
   const { url, init } = buildBriefRequest({ apiKey, model: briefModel, text, imageDataUrl });
 
   let response;
@@ -90,10 +102,10 @@ async function ask() {
 
 async function showBlocked(tabId) {
   await chrome.action.setBadgeText({ tabId, text: '!' });
-  await chrome.action.setTitle({ tabId, title: 'Screen Select cannot run on this page because Brave blocks it' });
+  await chrome.action.setTitle({ tabId, title: 'Screen Select cannot run on this page because the browser blocks it' });
 }
 
-// Brave allows two captures per second, which a quick repeat press can exceed.
+// Browsers allow two captures per second, which a quick repeat press can exceed.
 async function captureTab(windowId) {
   for (let attempt = 0; ; attempt += 1) {
     try {
@@ -141,11 +153,12 @@ chrome.action.onClicked.addListener(activate);
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const handlers = {
     'ss-recognize': () => recognize(message.dataUrl),
-    'ss-translate': () => translate(message.text),
+    'ss-translate': () => translate(message.text, message.target),
     'ss-brief': () => brief(message.text, message.imageDataUrl),
     'ss-fonts': fonts,
     'ss-search': () => chrome.search.query({ text: message.text, disposition: 'NEW_TAB' }),
     'ss-ask': ask,
+    'ss-settings': () => chrome.runtime.openOptionsPage(),
   };
   const handler = handlers[message.type];
   if (!handler) return false;

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import puppeteer from 'puppeteer-core';
 
-const BRAVE = '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser';
+const BROWSER = process.env.BROWSER_PATH ?? '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser';
 
 const SOURCE = process.env.EXT_DIR ?? 'extension';
 
@@ -28,7 +28,7 @@ manifest.host_permissions = ['<all_urls>'];
 writeFileSync(join(extDir, 'manifest.json'), JSON.stringify(manifest));
 
 const browser = await puppeteer.launch({
-  executablePath: BRAVE,
+  executablePath: BROWSER,
   headless: false,
   userDataDir: join(workDir, 'profile'),
   defaultViewport: null,
@@ -109,6 +109,11 @@ try {
 
   const clickButton = (name) =>
     inShadow((root, action) => root.querySelector(`[data-action="${action}"]`).click(), name);
+  const clickChoice = (name) =>
+    inShadow((root, label) => {
+      [...root.querySelectorAll('.choices button')].find((button) => button.textContent === label).click();
+    }, name);
+  const choicesShown = () => inShadow((root) => !root.querySelector('.choices').hidden);
   const status = () => inShadow((root) => root.querySelector('.status').textContent);
   const hostCount = () => page.$$eval('#screen-select-host', (hosts) => hosts.length);
   const waitForTab = (prefix) =>
@@ -167,6 +172,42 @@ try {
     );
     const text = await inShadow((root) => root.querySelector('.translation').textContent);
     assert.match(text, /\p{Script=Arabic}/u);
+  });
+
+  await check('text with two languages asks which one to translate to', async () => {
+    const original = await inShadow((root) => root.querySelector('.text').value);
+    await inShadow((root) => {
+      root.querySelector('.translation').textContent = '';
+      root.querySelector('.text').value = 'The price is 20 dollars\nالسعر هو عشرون دولارا\nThank you for your order';
+    });
+    await clickButton('translate');
+    await page.waitForFunction(
+      () => !document.querySelector('#screen-select-host').shadowRoot.querySelector('.choices').hidden,
+      { timeout: 5000 },
+    );
+    assert.equal(await inShadow((root) => root.querySelector('.translation').textContent), '');
+    await clickChoice('Arabic');
+    await page.waitForFunction(
+      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.translation').textContent,
+      { timeout: 15000 },
+    );
+    const arabic = await inShadow((root) => root.querySelector('.translation').textContent);
+    assert.doesNotMatch(arabic, /price|Thank/);
+    await clickChoice('English');
+    await page.waitForFunction(
+      () => !/\p{Script=Arabic}/u.test(document.querySelector('#screen-select-host').shadowRoot.querySelector('.translation').textContent),
+      { timeout: 15000 },
+    );
+    assert.equal(await choicesShown(), true, 'both choices stay available');
+    await inShadow((root, text) => {
+      root.querySelector('.text').value = text;
+    }, original);
+    await clickButton('translate');
+    await page.waitForFunction(
+      () => /\p{Script=Arabic}/u.test(document.querySelector('#screen-select-host').shadowRoot.querySelector('.translation').textContent),
+      { timeout: 15000 },
+    );
+    assert.equal(await choicesShown(), false, 'one language goes back to automatic');
   });
 
   await check('Translate opens Google Translate when the service fails', async () => {
@@ -583,14 +624,34 @@ try {
     );
   const clearKey = () => sw.evaluate(() => chrome.storage.local.remove(['apiKey', 'nvidiaKey']));
 
-  await check('Brief without a key copies a request and opens the chat', async () => {
+  await check('Brief without a key asks first and opens nothing', async () => {
     await clearKey();
     await sw.evaluate(() => chrome.storage.sync.remove(['askTarget', 'briefModel']));
     await reset();
     await activate();
     await drag('#english');
     await panelText();
+    const tabsBefore = (await browser.pages()).length;
     await clickButton('brief');
+    await page.waitForFunction(
+      () => !document.querySelector('#screen-select-host').shadowRoot.querySelector('.choices').hidden,
+      { timeout: 5000 },
+    );
+    assert.match(await inShadow((root) => root.querySelector('.choices').textContent), /no NVIDIA key is saved/);
+    if (process.env.CHOICE_SHOT) await page.screenshot({ path: process.env.CHOICE_SHOT });
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    assert.equal((await browser.pages()).length, tabsBefore);
+  });
+
+  await check('Add a key opens the settings page', async () => {
+    await clickChoice('Add a key');
+    const target = await waitForTab(`chrome-extension://${new URL(sw.url()).host}/options.html`);
+    await (await target.page())?.close();
+    await page.bringToFront();
+  });
+
+  await check('Use my chat instead copies a request and opens the chat', async () => {
+    await clickChoice('Use my chat instead');
     const target = await waitForTab('https://claude.ai/');
     await new Promise((resolve) => setTimeout(resolve, 300));
     assert.match(await status(), /Paste it into the chat/);

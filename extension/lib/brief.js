@@ -29,6 +29,10 @@ export function keyNameFor(model) {
   return modelFor(model).keyName;
 }
 
+export function providerFor(model) {
+  return modelFor(model).provider;
+}
+
 function buildNvidiaRequest({ apiKey, model, text, imageDataUrl }) {
   const body = {
     model: modelFor(model).id,
