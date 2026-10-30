@@ -1,78 +1,83 @@
 # Screen Select
 
-Drag a box over anything in a browser tab, even a video, and get the text out of it. Then copy it, translate it, search it or ask AI about it. It's made for Chrome and Brave.
+I got tired of pausing a video, taking a screenshot and pasting it into a chat just to ask about one line on the screen. So I made this.
+
+Press a shortcut, drag a box over anything in the tab, even a video, and you get the text. Then you can copy it, translate it, search it or ask AI about it.
+
+It's made for Chrome and Brave.
 
 ## Install
 
-You can do this without Git, npm or the Terminal.
+It isn't on the Chrome Web Store, so you load it yourself. It only takes a minute, and you won't need Git, npm or the Terminal.
 
 1. On this GitHub page, click the green **Code** button, then **Download ZIP**.
-2. Unzip it and move the folder somewhere permanent, such as Documents.
-3. Open `chrome://extensions` in your browser and turn on **Developer mode** (top right). Brave accepts this address too.
-4. Click **Load unpacked** and choose the `extension` folder inside it.
-5. To keep it handy, click the puzzle icon in the toolbar and pin Screen Select.
+2. Unzip it and put the folder somewhere you won't delete it, like Documents.
+3. Open `chrome://extensions` and turn on **Developer mode** (top right). Brave accepts this address too.
+4. Click **Load unpacked** and pick the `extension` folder inside.
+5. Click the puzzle icon in the toolbar and pin Screen Select, if you want it close by.
 
-Leave the folder where it is, because the browser loads the extension from there every time it starts.
+The browser reads the extension from that folder every time it starts, so if you delete the folder it stops working.
 
-To update, download it again, replace the folder, then press the reload icon on Screen Select in `chrome://extensions`.
+To update, download it again, replace the folder, and press the reload icon on Screen Select in `chrome://extensions`.
 
 ## Use
 
 1. Press `Alt+Shift+S` (Option+Shift+S on a Mac) or click the icon.
 2. Drag a box over what you want. `Esc` cancels.
-3. Pick something from the panel: Copy, Copy image, Translate, Brief, Search or Ask.
+3. Pick something in the panel: Copy, Copy image, Translate, Brief, Search or Ask.
 
-The panel holds real text, so you can fix mistakes, select part of it and right-click it.
+The text in the panel is real text. If it misread a word you can just fix it, and you can select part of it and right-click like anywhere else.
 
-Translate picks the direction for you: Arabic goes to English, and everything else goes to Arabic. If your selection has both Arabic and English, it asks which one you want first.
+Translate works out the direction by itself. Arabic goes to English and everything else goes to Arabic. If you grab Arabic and English together by mistake, it asks which one you want.
 
 ## Brief
 
-Brief explains your selection in a few sentences. You choose who writes it under Details, then Extension options.
+Brief explains what you selected in a few sentences, right there in the panel. It needs an API key, and you pick the service under Details, then Extension options.
 
-| Option | Cost | Where the answer appears |
-|---|---|---|
-| NVIDIA Nemotron (default) | Free trial with limited credits | In the panel |
-| NVIDIA DeepSeek | Free trial with limited credits, can be very slow | In the panel |
-| Claude Opus or Haiku | Paid per use, separate from a Claude chat plan | In the panel |
+| Option | Cost |
+|---|---|
+| NVIDIA Nemotron (default) | Free trial with limited credits |
+| NVIDIA DeepSeek | Same free trial and same key |
+| Claude Opus or Haiku | Paid per use, separate from a Claude chat plan |
 
-Every option needs an API key, and both NVIDIA options share one. If yours is missing, the panel asks what you want to do: add a key, or copy a request and open your chat.
+Nemotron is the default because it's fast. DeepSeek is still there, but when I tried it, it didn't answer at all.
 
-To set up the free option:
+To set up the free one:
 
-1. Create an account at [build.nvidia.com](https://build.nvidia.com) and generate an API key.
+1. Make an account at [build.nvidia.com](https://build.nvidia.com) and generate an API key.
 2. Open the extension's Details page, then Extension options.
 3. Paste the key under **Your NVIDIA API key** and click **Save NVIDIA key**.
 
-Brief gives up after 25 seconds and tells you. If that keeps happening, choose another option in Extension options.
+Don't have a key? Brief will ask, and you can add one or copy a request and open your chat instead. If a service takes more than 25 seconds, Brief gives up and tells you.
 
-Keys stay in this browser profile, so anyone who can open that profile could read them.
+Your key stays in this browser profile, which also means anyone who can open that profile can read it.
 
 ## Looks
 
-The first time you use it, a small window asks you to choose a look. You can change it later with the **Look** button in the panel or in the extension's settings.
+The first time you use it, a small window asks you to pick a look. You can change your mind later with the **Look** button in the panel or in the settings.
 
-Windows is the default and follows Microsoft's Fluent design. Mac has frosted glass, window buttons and a live selection size. Linux has a clean header bar in the style of GNOME's Adwaita. Print turns your selection into an instant photo that develops while the text is read, with handwritten notes.
+Windows is the default and follows Microsoft's Fluent design. Mac has frosted glass and the three window buttons. Linux looks like GNOME. Print is my favourite: your selection comes out as an instant photo with handwriting on it.
 
-Windows, Mac and Linux follow your light or dark mode. They use the real system fonts when you have them, and your computer's default font when you don't.
+The first three follow your light or dark mode. They use the real system fonts if you have them and your computer's default font if you don't.
 
 ## Settings
 
-Change the shortcut at `chrome://extensions/shortcuts`. If `Alt+Shift+S` does nothing, another extension may have taken it, and you can set a new one there.
+You can change the shortcut at `chrome://extensions/shortcuts`. If `Alt+Shift+S` does nothing, another extension probably took it, so set a new one there.
 
 Extension options is also where you switch Ask between Claude and ChatGPT.
 
-## Limits
+## What it can't do
 
-- Protected streaming sites such as Netflix show up as a black picture, so there's no text to read.
-- Browsers block extensions on their own pages and on the Chrome Web Store. The icon shows `!` there.
-- Blurry, tiny or stylised text can be misread, Arabic more often than English. You can fix it in the panel.
+- Netflix and other protected sites show up as a black picture, so there's nothing to read.
+- Browsers don't let extensions run on their own pages or the Chrome Web Store. The icon shows `!` there.
+- Blurry, tiny or fancy text can come out wrong, and Arabic more often than English.
+- Capital I and small l look the same in a lot of fonts. It fixes "Al" to "AI" most of the time, but a title like "Al Revolution" can slip through.
 - Copy image needs an `https` page.
-- Videos embedded from another site may keep playing while you select.
+- A video embedded from another site may keep playing while you select.
 
 ## Privacy
 
-Translate sends the panel text to Google. Brief sends your selection, including the picture, to the service you chose. Both happen only when you press the button. Everything else stays on your computer.
+Translate sends the panel text to Google. Brief sends your selection, picture included, to the service you picked. Both happen only when you press the button, and everything else stays on your computer.
 
 ## Fonts
 
