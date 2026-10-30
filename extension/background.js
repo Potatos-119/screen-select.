@@ -1,4 +1,4 @@
-import { buildBriefRequest, describeBriefError, parseBriefResponse } from './lib/brief.js';
+import { briefRequestText, buildBriefRequest, describeBriefError, parseBriefResponse } from './lib/brief.js';
 import { buildTranslateUrl, fallbackUrl, parseTranslateResponse, targetLang } from './lib/translate.js';
 
 const ASK_URLS = {
@@ -45,10 +45,7 @@ async function translate(text) {
 
 async function brief(text, imageDataUrl) {
   const { apiKey } = await chrome.storage.local.get('apiKey');
-  if (!apiKey) {
-    await chrome.runtime.openOptionsPage();
-    return { error: 'Add your Claude API key in the settings tab that just opened, then press Brief again.' };
-  }
+  if (!apiKey) return { noKey: true, requestText: text ? briefRequestText(text) : '' };
   const { briefModel } = await chrome.storage.sync.get({ briefModel: 'opus' });
   const { url, init } = buildBriefRequest({ apiKey, model: briefModel, text, imageDataUrl });
 

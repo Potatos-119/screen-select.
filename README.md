@@ -4,12 +4,17 @@ Select text from anything on screen in Brave, even inside a video, then copy, tr
 
 ## Install
 
-1. Open `brave://extensions` in Brave.
-2. Turn on **Developer mode** (top right).
-3. Click **Load unpacked** and choose the `extension` folder.
-4. Optional: click the puzzle icon in the toolbar and pin Screen Select.
+You don't need Git, npm or the Terminal.
 
-Keep the `extension` folder where it is. Brave loads it from there each time.
+1. Download `screen-select.zip`. Get it from whoever shared it, or use the green **Code** button on GitHub, then **Download ZIP**.
+2. Unzip it and move the folder somewhere permanent, such as Documents.
+3. Open `brave://extensions` in Brave and turn on **Developer mode** (top right).
+4. Click **Load unpacked** and choose the folder with `manifest.json` inside. In the GitHub download, that's the `extension` folder.
+5. Optional: click the puzzle icon in the toolbar and pin Screen Select.
+
+Keep the folder where it is. Brave loads the extension from there each time.
+
+**To update:** replace the folder with the new one, then press the reload icon on Screen Select in `brave://extensions`.
 
 ## Use
 
@@ -23,12 +28,12 @@ Translation goes both ways by itself: Arabic to English, anything else to Arabic
 
 ## Brief
 
-Brief shows a short explanation of your selection in the panel, including diagrams and pictures. It needs your own Claude API key, which is billed per use and separately from a Claude chat subscription.
+Brief gives you a short explanation of your selection. It works two ways:
 
-1. Create a key at [console.anthropic.com](https://console.anthropic.com) and add credit. A low spending limit is a good idea.
-2. Open the extension's Details page, then Extension options, and save the key.
+- **With no key (free):** it copies a ready-made request and opens your chat. Paste it and send, and your Claude plan answers it. If you selected a picture with no text, it copies the picture instead.
+- **With an API key:** the answer appears in the panel, and it can read diagrams and pictures. API use is billed separately from a Claude chat plan.
 
-The key is stored only in this browser profile. Anyone with access to that profile could read it.
+To add a key, create one at [console.anthropic.com](https://console.anthropic.com), add credit, then save it under Details, Extension options. A low spending limit is a good idea. The key is stored only in this browser profile, and anyone with access to that profile could read it.
 
 ## Looks
 
@@ -66,4 +71,7 @@ npm install
 npm run vendor
 npm test
 npm run e2e
+npm run package
 ```
+
+`npm run package` writes `dist/screen-select.zip`, ready to share or to upload to the Chrome Web Store.

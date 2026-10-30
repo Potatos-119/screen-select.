@@ -601,8 +601,13 @@ globalThis.__screenSelectStart = async (dataUrl) => {
         // Falls through to the older copy command below.
       }
     }
-    textArea.select();
-    return document.execCommand('copy');
+    const scratch = document.createElement('textarea');
+    scratch.value = text;
+    root.append(scratch);
+    scratch.select();
+    const copied = document.execCommand('copy');
+    scratch.remove();
+    return copied;
   }
 
   async function copyImage() {
@@ -656,7 +661,11 @@ globalThis.__screenSelectStart = async (dataUrl) => {
         text: textArea.value.trim(),
         imageDataUrl: await toDataUrl(image),
       });
-      if (result?.brief) {
+      if (result?.noKey) {
+        const copied = result.requestText ? await copyText(result.requestText) : await copyImage();
+        setStatus(copied ? 'Copied. Paste it into the chat to get your brief.' : 'Could not copy. Copy it by hand first.');
+        await chrome.runtime.sendMessage({ type: 'ss-ask' });
+      } else if (result?.brief) {
         brief.textContent = result.brief;
         setStatus('');
       } else {

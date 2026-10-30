@@ -7,6 +7,8 @@ import puppeteer from 'puppeteer-core';
 
 const BRAVE = '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser';
 
+const SOURCE = process.env.EXT_DIR ?? 'extension';
+
 const server = createServer((_req, res) => {
   res.writeHead(200, {
     'Content-Type': 'text/html; charset=utf-8',
@@ -19,7 +21,7 @@ const PAGE_URL = `http://127.0.0.1:${server.address().port}/`;
 
 const workDir = mkdtempSync(join(tmpdir(), 'screen-select-'));
 const extDir = join(workDir, 'ext');
-cpSync('extension', extDir, { recursive: true });
+cpSync(SOURCE, extDir, { recursive: true });
 // Tests can't produce the user gesture activeTab needs, so this copy gets all sites.
 const manifest = JSON.parse(readFileSync(join(extDir, 'manifest.json')));
 manifest.host_permissions = ['<all_urls>'];
@@ -581,16 +583,17 @@ try {
     );
   const clearKey = () => sw.evaluate(() => chrome.storage.local.remove('apiKey'));
 
-  await check('Brief without a key opens settings and says why', async () => {
+  await check('Brief without a key copies a request and opens the chat', async () => {
     await clearKey();
+    await sw.evaluate(() => chrome.storage.sync.remove('askTarget'));
     await reset();
     await activate();
     await drag('#english');
     await panelText();
     await clickButton('brief');
-    const target = await waitForTab(`chrome-extension://${new URL(sw.url()).host}/options.html`);
+    const target = await waitForTab('https://claude.ai/');
     await new Promise((resolve) => setTimeout(resolve, 300));
-    assert.match(await status(), /API key/);
+    assert.match(await status(), /Paste it into the chat/);
     await (await target.page())?.close();
     await page.bringToFront();
   });

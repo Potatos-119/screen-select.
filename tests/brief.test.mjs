@@ -4,6 +4,7 @@ import {
   buildBriefRequest,
   parseBriefResponse,
   describeBriefError,
+  briefRequestText,
 } from '../extension/lib/brief.js';
 
 const request = (overrides = {}) =>
@@ -98,4 +99,10 @@ test('explains each API failure', () => {
     /credit balance is too low/,
   );
   assert.match(describeBriefError(500), /500/);
+});
+
+test('the request for the chat holds the selection', () => {
+  const text = briefRequestText('an agent perceives');
+  assert.match(text, /plain sentences/);
+  assert.match(text, /an agent perceives/);
 });
