@@ -799,6 +799,25 @@ try {
     assert.match(await status(), /NVIDIA took too long/);
   });
 
+  await check('GPT-OSS explains that it needs text', async () => {
+    await stubBrief(200, { choices: [{ message: { content: 'Should not be used.' } }] });
+    await sw.evaluate(() => chrome.storage.sync.set({ briefModel: 'gptoss' }));
+    const original = await inShadow((root) => root.querySelector('.text').value);
+    await inShadow((root) => {
+      root.querySelector('.text').value = '';
+    });
+    await clickButton('brief');
+    await page.waitForFunction(
+      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.status').textContent.includes('text only'),
+      { timeout: 5000 },
+    );
+    assert.equal(await sw.evaluate(() => globalThis.__briefCalls.length), 0);
+    await inShadow((root, text) => {
+      root.querySelector('.text').value = text;
+    }, original);
+    await sw.evaluate(() => chrome.storage.sync.remove('briefModel'));
+  });
+
   await check('the real NVIDIA server answers and a wrong key is explained', async () => {
     await sw.evaluate(() => {
       globalThis.fetch = globalThis.__realFetch;

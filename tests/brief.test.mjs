@@ -6,6 +6,7 @@ import {
   keyNameFor,
   providerFor,
   describeBriefTimeout,
+  isTextOnly,
   buildBriefRequest,
   parseBriefResponse,
   describeBriefError,
@@ -132,6 +133,23 @@ test('DeepSeek stays available on the same NVIDIA key', () => {
 test('the default model answers without thinking first, and DeepSeek is left as it is', () => {
   assert.equal(JSON.parse(nvidia().init.body).chat_template_kwargs.enable_thinking, false);
   assert.equal(JSON.parse(request({ model: 'deepseek' }).init.body).chat_template_kwargs, undefined);
+});
+
+test('GPT-OSS gets the text and no picture', () => {
+  const body = JSON.parse(request({ model: 'gptoss' }).init.body);
+  assert.equal(body.model, 'openai/gpt-oss-20b');
+  assert.equal(body.messages[1].content.length, 1);
+  assert.equal(body.messages[1].content[0].type, 'text');
+  assert.equal(keyNameFor('gptoss'), 'nvidiaKey');
+  assert.equal(isTextOnly('gptoss'), true);
+  assert.equal(isTextOnly('nvidia'), false);
+});
+
+test('every Brief option can be picked in settings', () => {
+  const page = readFileSync('extension/options.html', 'utf8');
+  for (const model of ['nvidia', 'deepseek', 'gptoss', 'opus', 'haiku']) {
+    assert.match(page, new RegExp(`name="briefModel" value="${model}"`));
+  }
 });
 
 test('a slow answer gives up in time and says so', () => {
