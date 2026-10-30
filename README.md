@@ -26,6 +26,8 @@ To update, download it again, replace the folder, and press the reload icon on S
 2. Drag a box over what you want. `Esc` cancels.
 3. Pick something in the panel: Copy, Copy image, Translate, Brief, Search or Ask.
 
+Search opens your text in Google's AI Mode, so you get an answer and not just a list of links.
+
 The text in the panel is real text. If it misread a word you can just fix it, and you can select part of it and right-click like anywhere else.
 
 Translate works out the direction by itself. Arabic goes to English and everything else goes to Arabic. If you grab Arabic and English together by mistake, it asks which one you want.
@@ -76,7 +78,7 @@ Extension options is also where you switch Ask between Claude and ChatGPT.
 
 ## Privacy
 
-Translate sends the panel text to Google. Brief sends your selection, picture included, to the service you picked. Both happen only when you press the button, and everything else stays on your computer.
+Translate and Search send the panel text to Google. Brief sends your selection, picture included, to the service you picked. All of that happens only when you press the button, and everything else stays on your computer.
 
 ## Fonts
 

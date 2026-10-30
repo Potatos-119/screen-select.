@@ -8,6 +8,7 @@ import {
   parseBriefResponse,
   providerFor,
 } from './lib/brief.js';
+import { aiSearchUrl } from './lib/search.js';
 import {
   buildTranslateUrl,
   fallbackUrl,
@@ -159,7 +160,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     'ss-translate': () => translate(message.text, message.target),
     'ss-brief': () => brief(message.text, message.imageDataUrl),
     'ss-fonts': fonts,
-    'ss-search': () => chrome.search.query({ text: message.text, disposition: 'NEW_TAB' }),
+    'ss-search': () => chrome.tabs.create({ url: aiSearchUrl(message.text) }),
     'ss-ask': ask,
     'ss-settings': () => chrome.runtime.openOptionsPage(),
   };

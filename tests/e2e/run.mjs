@@ -272,13 +272,13 @@ try {
     await page.bringToFront();
   });
 
-  await check('Search opens a new tab', async () => {
+  await check('Search opens Google AI Mode in a new tab', async () => {
     const before = (await browser.pages()).length;
     await clickButton('search');
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    const pages = await browser.pages();
-    assert.equal(pages.length, before + 1);
-    await pages.at(-1).close();
+    const target = await browser.waitForTarget((t) => t.url().includes('udm=50'), { timeout: 10000 });
+    assert.equal((await browser.pages()).length, before + 1);
+    assert.match(target.url(), /^https:\/\/www\.google\.com\/search/);
+    await (await target.page())?.close();
     await page.bringToFront();
   });
 
