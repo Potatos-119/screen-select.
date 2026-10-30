@@ -743,6 +743,21 @@ try {
     assert.match(image, /^data:image\/jpeg;base64,/);
   });
 
+  await check('Brief stops waiting and explains a server that never answers', async () => {
+    await sw.evaluate(() => {
+      globalThis.fetch = (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init.signal.addEventListener('abort', () => reject(init.signal.reason));
+        });
+    });
+    await clickButton('brief');
+    await page.waitForFunction(
+      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.status').textContent.includes('too long'),
+      { timeout: 30000 },
+    );
+    assert.match(await status(), /NVIDIA took too long/);
+  });
+
   await check('the real NVIDIA server answers and a wrong key is explained', async () => {
     await sw.evaluate(() => {
       globalThis.fetch = globalThis.__realFetch;

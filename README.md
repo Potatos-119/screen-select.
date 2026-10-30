@@ -32,16 +32,19 @@ Brief explains your selection in a few sentences. You choose who writes it under
 
 | Option | Cost | Where the answer appears |
 |---|---|---|
-| NVIDIA DeepSeek (default) | Free trial with limited credits | In the panel |
+| NVIDIA Nemotron (default) | Free trial with limited credits | In the panel |
+| NVIDIA DeepSeek | Free trial with limited credits, can be very slow | In the panel |
 | Claude Opus or Haiku | Paid per use, separate from a Claude chat plan | In the panel |
 
-Both options need an API key. If yours is missing, the panel asks what you want to do: add a key, or copy a request and open your chat.
+Every option needs an API key, and both NVIDIA options share one. If yours is missing, the panel asks what you want to do: add a key, or copy a request and open your chat.
 
 To set up the free option:
 
 1. Create an account at [build.nvidia.com](https://build.nvidia.com) and generate an API key.
 2. Open the extension's Details page, then Extension options.
 3. Paste the key under **Your NVIDIA API key** and click **Save NVIDIA key**.
+
+Brief gives up after 25 seconds and tells you. If that keeps happening, choose another option in Extension options.
 
 Keys stay in this browser profile, so anyone who can open that profile could read them.
 

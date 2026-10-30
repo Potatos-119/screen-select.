@@ -1,7 +1,9 @@
 import {
+  BRIEF_TIMEOUT_MS,
   briefRequestText,
   buildBriefRequest,
   describeBriefError,
+  describeBriefTimeout,
   keyNameFor,
   parseBriefResponse,
   providerFor,
@@ -70,8 +72,9 @@ async function brief(text, imageDataUrl) {
 
   let response;
   try {
-    response = await fetch(url, init);
-  } catch {
+    response = await fetch(url, { ...init, signal: AbortSignal.timeout(BRIEF_TIMEOUT_MS) });
+  } catch (error) {
+    if (error?.name === 'TimeoutError') return { error: describeBriefTimeout(briefModel) };
     return { error: 'Could not reach the AI service. Check your connection and try again.' };
   }
   const json = await response.json().catch(() => null);

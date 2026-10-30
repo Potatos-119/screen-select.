@@ -3,10 +3,19 @@ const CLAUDE_VERSION = '2026-10-21';
 const CLAUDE_FALLBACK_BETA = 'server-side-fallback-2026-07-01';
 const NVIDIA_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
 const MAX_TOKENS = 2000;
+// Stays under the 30 seconds a browser lets a service worker wait for a reply.
+export const BRIEF_TIMEOUT_MS = 25000;
 
 const DEFAULT_MODEL = 'nvidia';
 const MODELS = {
-  nvidia: { provider: 'NVIDIA', keyName: 'nvidiaKey', id: 'deepseek-ai/deepseek-v4.1-flash' },
+  // With thinking on, this model took 9 to 25 seconds. Without it, about 1.5.
+  nvidia: {
+    provider: 'NVIDIA',
+    keyName: 'nvidiaKey',
+    id: 'nvidia/nemotron-3.5-super-vl-120b-a12b',
+    options: { chat_template_kwargs: { enable_thinking: false } },
+  },
+  deepseek: { provider: 'NVIDIA', keyName: 'nvidiaKey', id: 'deepseek-ai/deepseek-v4.1-flash' },
   opus: { provider: 'Claude', keyName: 'apiKey', id: 'claude-opus-5-5', fallbacks: true },
   haiku: { provider: 'Claude', keyName: 'apiKey', id: 'claude-haiku-5-5', fallbacks: false },
 };
@@ -38,6 +47,7 @@ function buildNvidiaRequest({ apiKey, model, text, imageDataUrl }) {
     model: modelFor(model).id,
     max_tokens: MAX_TOKENS,
     stream: false,
+    ...modelFor(model).options,
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
       {
@@ -114,6 +124,10 @@ export function parseBriefResponse(json, model) {
     .join('');
   if (!text) throw new Error('Claude sent back an empty reply. Try again.');
   return text;
+}
+
+export function describeBriefTimeout(model) {
+  return `${providerFor(model)} took too long to answer. Try again, or choose another option in the extension settings.`;
 }
 
 export function describeBriefError(status, json, model) {

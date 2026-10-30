@@ -2,8 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
+  BRIEF_TIMEOUT_MS,
   keyNameFor,
   providerFor,
+  describeBriefTimeout,
   buildBriefRequest,
   parseBriefResponse,
   describeBriefError,
@@ -61,7 +63,7 @@ test('Haiku leaves the fallback option off', () => {
 });
 
 test('an unknown model falls back to the free option', () => {
-  assert.equal(JSON.parse(request({ model: 'nope' }).init.body).model, 'deepseek-ai/deepseek-v4.1-flash');
+  assert.equal(JSON.parse(request({ model: 'nope' }).init.body).model, 'nvidia/nemotron-3.5-super-vl-120b-a12b');
 });
 
 test('page content is marked as data, not instructions', () => {
@@ -117,7 +119,24 @@ test('NVIDIA uses its own address, key header and model', () => {
   assert.equal(url, 'https://integrate.api.nvidia.com/v1/chat/completions');
   assert.equal(init.headers.authorization, 'Bearer test-key');
   assert.equal(init.headers['x-api-key'], undefined);
+  assert.equal(JSON.parse(init.body).model, 'nvidia/nemotron-3.5-super-vl-120b-a12b');
+});
+
+test('DeepSeek stays available on the same NVIDIA key', () => {
+  const { url, init } = request({ model: 'deepseek' });
+  assert.equal(url, 'https://integrate.api.nvidia.com/v1/chat/completions');
   assert.equal(JSON.parse(init.body).model, 'deepseek-ai/deepseek-v4.1-flash');
+  assert.equal(keyNameFor('deepseek'), 'nvidiaKey');
+});
+
+test('the default model answers without thinking first, and DeepSeek is left as it is', () => {
+  assert.equal(JSON.parse(nvidia().init.body).chat_template_kwargs.enable_thinking, false);
+  assert.equal(JSON.parse(request({ model: 'deepseek' }).init.body).chat_template_kwargs, undefined);
+});
+
+test('a slow answer gives up in time and says so', () => {
+  assert.ok(BRIEF_TIMEOUT_MS < 30000);
+  assert.match(describeBriefTimeout('deepseek'), /NVIDIA took too long/);
 });
 
 test('NVIDIA gets the picture and text in its own format', () => {
