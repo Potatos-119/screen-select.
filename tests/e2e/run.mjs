@@ -151,6 +151,28 @@ try {
     await panelText();
   });
 
+  await check('long text fits the box and starts at the top', async () => {
+    await reset();
+    await activate();
+    await drag('#long');
+    assert.match(await panelText(), /First line[\s\S]*Seventh line/);
+    const box = await inShadow((root) => {
+      const text = root.querySelector('.text');
+      return {
+        scrollTop: text.scrollTop,
+        hidden: text.scrollHeight - text.clientHeight,
+        cursor: text.selectionStart,
+        focused: root.activeElement === text,
+      };
+    });
+    assert.deepEqual(box, { scrollTop: 0, hidden: 0, cursor: 0, focused: true });
+    if (process.env.LONG_SHOT) await page.screenshot({ path: process.env.LONG_SHOT });
+    await reset();
+    await activate();
+    await drag('#english');
+    await panelText();
+  });
+
   await check('frame is drawn under a strict content security policy', async () => {
     const blank = await inShadow((root) => {
       const canvas = root.querySelector('.frame');

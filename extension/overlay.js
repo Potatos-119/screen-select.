@@ -133,7 +133,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       to { opacity: 1; transform: none; }
     }
     .text {
-      width: 100%; min-height: 86px; max-height: 36vh; padding: 8px 10px; resize: vertical;
+      width: 100%; min-height: 86px; max-height: 50vh; padding: 8px 10px; resize: vertical;
       border: 1px solid var(--line); border-radius: var(--control-radius);
       background: var(--well); color: inherit; font: inherit;
     }
@@ -496,6 +496,15 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     if (!panel.hidden && panelAnchor) placePanel(panelAnchor);
   }).observe(panel);
 
+  function fitTextBox() {
+    textArea.style.height = 'auto';
+    const border = textArea.offsetHeight - textArea.clientHeight;
+    // One extra pixel covers rounding, which would otherwise leave the box scrollable.
+    textArea.style.height = `${textArea.scrollHeight + border + 1}px`;
+  }
+
+  textArea.addEventListener('input', fitTextBox);
+
   function cropTo(imageRect) {
     const canvas = new OffscreenCanvas(imageRect.width, imageRect.height);
     canvas
@@ -530,6 +539,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
 
     panel.dataset.state = 'reading';
     textArea.value = '';
+    textArea.style.height = '';
     translation.textContent = '';
     brief.textContent = '';
     choices.hidden = true;
@@ -550,7 +560,11 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     } else if (result?.text) {
       textArea.value = result.text;
       setStatus('');
-      textArea.focus();
+      fitTextBox();
+      // Focus puts the cursor at the end, which would scroll long text out of view.
+      textArea.setSelectionRange(0, 0);
+      textArea.focus({ preventScroll: true });
+      textArea.scrollTop = 0;
     } else {
       setStatus('No text found. You can still copy the image or get a brief.');
     }
