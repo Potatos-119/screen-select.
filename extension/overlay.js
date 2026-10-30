@@ -1,31 +1,57 @@
 globalThis.__screenSelectStart = async (dataUrl) => {
   const { toImageRect, isUsableDrag, upscaleFactor, fitWithin } = globalThis.ScreenSelectCrop;
-  const THEMES = ['basic', 'print', 'mac'];
-  const saved = await chrome.storage.sync.get({ theme: 'basic' });
-  const theme = THEMES.includes(saved.theme) ? saved.theme : 'basic';
+  const { LOOKS, PREVIEW_CSS, normalizeLook, cardMarkup } = globalThis.ScreenSelectLooks;
+  const saved = await chrome.storage.sync.get(['theme', 'lookChosen']);
+  let theme = normalizeLook(saved.theme);
   const BRIEF_IMAGE_MAX_EDGE = 1568;
 
   const STYLE = `
     :host {
-      --surface: #ffffff;
-      --text: #1d2129;
-      --muted: #5c6470;
-      --line: #e3e6eb;
-      --well: #f5f6f8;
-      --accent: #3563e9;
+      --surface: rgba(243, 243, 243, 0.88);
+      --text: #1b1b1b;
+      --muted: #5d5d5d;
+      --line: rgba(0, 0, 0, 0.09);
+      --well: #ffffff;
+      --accent: #0067c0;
       --on-accent: #ffffff;
-      --slip: #eef3ff;
-      --radius: 14px;
-      --control-radius: 8px;
-      --ui-font: system-ui, -apple-system, 'Segoe UI', sans-serif;
-      --frame-filter: brightness(0.5);
-      --panel-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 18px 44px -12px rgba(0, 0, 0, 0.5);
-      --panel-in: settle 170ms ease-out;
+      --slip: rgba(0, 103, 192, 0.1);
+      --radius: 8px;
+      --control-radius: 4px;
+      --ui-font: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
+      --frame-filter: brightness(0.55);
+      --blur: blur(30px) saturate(125%);
+      --panel-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 16px 48px rgba(0, 0, 0, 0.32);
+      --panel-in: rise 200ms cubic-bezier(0.1, 0.9, 0.2, 1);
     }
     @media (prefers-color-scheme: dark) {
-      :host([data-theme='basic']) {
-        --surface: #1f2228; --text: #eef0f3; --muted: #a2a9b5; --line: #343843; --well: #2a2e36;
-        --accent: #6b8ff5; --on-accent: #10131a; --slip: #2a3350;
+      :host([data-theme='windows']) {
+        --surface: rgba(32, 32, 32, 0.88); --text: #ffffff; --muted: #c8c8c8; --line: rgba(255, 255, 255, 0.09);
+        --well: rgba(255, 255, 255, 0.06); --accent: #60cdff; --on-accent: #000000; --slip: rgba(96, 205, 255, 0.14);
+      }
+    }
+    :host([data-theme='linux']) {
+      --surface: #fafafb;
+      --text: #1e1e22;
+      --muted: #6a6a70;
+      --line: rgba(0, 0, 0, 0.12);
+      --well: #ffffff;
+      --header: #ebebed;
+      --flat: rgba(0, 0, 6, 0.08);
+      --accent: #3584e4;
+      --on-accent: #ffffff;
+      --slip: rgba(53, 132, 228, 0.13);
+      --radius: 12px;
+      --control-radius: 6px;
+      --ui-font: 'Adwaita Sans', Cantarell, Inter, system-ui, -apple-system, sans-serif;
+      --frame-filter: brightness(0.5);
+      --blur: none;
+      --panel-shadow: 0 0 0 1px rgba(0, 0, 6, 0.14), 0 14px 40px rgba(0, 0, 6, 0.38);
+      --panel-in: settle 180ms ease-out;
+    }
+    @media (prefers-color-scheme: dark) {
+      :host([data-theme='linux']) {
+        --surface: #222226; --text: #ffffff; --muted: #b0b0b6; --line: rgba(255, 255, 255, 0.1); --well: #2e2e32;
+        --header: #2e2e32; --flat: rgba(255, 255, 255, 0.1); --accent: #3584e4; --slip: rgba(53, 132, 228, 0.25);
       }
     }
     :host([data-theme='mac']) {
@@ -40,6 +66,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       --control-radius: 6px;
       --ui-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
       --frame-filter: brightness(0.62);
+      --blur: blur(34px) saturate(180%);
       --panel-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.3), 0 22px 60px rgba(0, 0, 0, 0.42);
       --panel-in: pop 240ms cubic-bezier(0.2, 0.9, 0.3, 1.1);
     }
@@ -57,6 +84,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       --marker: #ffe94a;
       --slip: #fff3a3;
       --radius: 3px;
+      --blur: none;
       --frame-filter: grayscale(0.92) brightness(0.48);
       --panel-shadow: 0 1px 1px rgba(20, 24, 34, 0.3), 0 22px 44px -10px rgba(0, 0, 0, 0.6);
       --panel-in: eject 420ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
@@ -69,19 +97,34 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     .lit { pointer-events: none; clip-path: inset(100%); }
     .hint {
       position: fixed; top: 20px; left: 50%; transform: translateX(-50%); padding: 7px 14px;
-      border-radius: 999px; background: var(--surface); color: var(--text);
+      border-radius: var(--radius); background: var(--surface); color: var(--text);
       font: 500 13px/1.3 var(--ui-font); box-shadow: var(--panel-shadow); pointer-events: none;
+      backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
     }
     .hint[hidden], .box[hidden], .size[hidden], .panel[hidden] { display: none; }
     .box { position: fixed; pointer-events: none; border: 2px solid var(--accent); border-radius: 2px; }
     .size { display: none; }
-    .titlebar, .photo, .flash { display: none; }
+    .photo, .flash { display: none; }
+    .titlebar {
+      position: relative; display: flex; align-items: center; gap: 8px; min-height: 34px; margin: 0 -14px;
+      padding: 0 14px;
+    }
+    .light { display: none; }
+    .title { font-size: 12px; color: var(--text); }
+    .close {
+      display: grid; place-items: center; width: 44px; height: 34px; margin: 0 -14px 0 auto; padding: 0; border: 0;
+      border-radius: 0 var(--radius) 0 0; background: transparent; color: var(--text); cursor: pointer;
+      font: 400 17px/1 var(--ui-font);
+    }
+    .close:hover { background: #c42b1c; color: #ffffff; }
     .panel {
-      position: fixed; width: 470px; max-width: calc(100vw - 32px); max-height: calc(100vh - 16px);
-      overflow: auto; padding: 12px; display: grid; gap: 10px;
+      position: fixed; width: 510px; max-width: calc(100vw - 32px); max-height: calc(100vh - 16px);
+      overflow: auto; padding: 0 14px 14px; display: grid; gap: 10px;
       border-radius: var(--radius); background: var(--surface); color: var(--text);
       box-shadow: var(--panel-shadow); font: 14px/1.5 var(--ui-font); animation: var(--panel-in);
+      backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
     }
+    @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
     @keyframes settle { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
     @keyframes pop { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: none; } }
     @keyframes eject {
@@ -106,6 +149,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       background: var(--surface); color: var(--text); cursor: pointer; font: 600 13px/1.25 var(--ui-font);
     }
     .actions button:hover { background: var(--well); }
+    .actions [data-action='look'] { margin-left: auto; }
     .actions [data-action='brief'] { border-color: transparent; background: var(--accent); color: var(--on-accent); }
     .actions [data-action='brief']:hover { background: var(--accent); filter: brightness(1.08); }
     button:focus-visible, .text:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -123,26 +167,20 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       font-variant-numeric: tabular-nums;
     }
     :host([data-theme='mac']) .size[hidden] { display: none; }
-    :host([data-theme='mac']) .panel, :host([data-theme='mac']) .hint {
-      backdrop-filter: blur(34px) saturate(180%);
-      -webkit-backdrop-filter: blur(34px) saturate(180%);
+    :host([data-theme='mac']) .panel { font-size: 13px; }
+    :host([data-theme='mac']) .close, :host([data-theme='mac']) .light {
+      display: block; width: 12px; height: 12px; padding: 0; border: 0; border-radius: 50%;
+      box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.18);
     }
-    :host([data-theme='mac']) .panel { padding: 0 14px 14px; gap: 10px; font-size: 13px; }
-    :host([data-theme='mac']) .titlebar {
-      position: relative; display: flex; align-items: center; gap: 8px; height: 34px; margin: 0 -2px;
+    :host([data-theme='mac']) .close {
+      display: grid; order: -1; margin: 0; background: #ff5f57; color: transparent; font: 700 10px/1 var(--ui-font);
     }
-    .titlebar button, .light { width: 12px; height: 12px; padding: 0; border: 0; border-radius: 50%; }
-    .titlebar button {
-      display: grid; place-items: center; background: #ff5f57; color: transparent; cursor: pointer;
-      font: 700 10px/1 var(--ui-font); box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.18);
-    }
-    .titlebar button:hover, .titlebar button:focus-visible { color: rgba(90, 0, 0, 0.75); }
-    .light { box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.18); }
-    .light.minimize { background: #febc2e; }
-    .light.zoom { background: #28c840; }
-    .title {
+    :host([data-theme='mac']) .close:hover, :host([data-theme='mac']) .close:focus-visible { color: rgba(90, 0, 0, 0.75); }
+    :host([data-theme='mac']) .light.minimize { background: #febc2e; }
+    :host([data-theme='mac']) .light.zoom { background: #28c840; }
+    :host([data-theme='mac']) .title, :host([data-theme='linux']) .title {
       position: absolute; left: 0; right: 0; text-align: center; pointer-events: none;
-      font-weight: 600; font-size: 13px; color: var(--text);
+      font-weight: 600; font-size: 13px;
     }
     :host([data-theme='mac']) .text { min-height: 78px; border-color: transparent; border-radius: 8px; font-size: 13px; }
     :host([data-theme='mac']) .text:focus-visible { outline: 3px solid rgba(0, 122, 255, 0.4); outline-offset: 0; }
@@ -152,6 +190,26 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     }
     :host([data-theme='mac']) .actions [data-action='brief'] { background: var(--accent); color: #fff; }
 
+    :host([data-theme='windows']) .text { border-bottom-color: var(--muted); }
+    :host([data-theme='windows']) .text:focus-visible {
+      outline: 0; border-bottom: 2px solid var(--accent);
+    }
+    :host([data-theme='windows']) .actions button { font-weight: 500; border-bottom-color: rgba(127, 127, 127, 0.4); }
+    :host([data-theme='windows']) .actions [data-action='brief'] { border-color: transparent; }
+
+    :host([data-theme='linux']) .panel { padding-bottom: 12px; }
+    :host([data-theme='linux']) .titlebar { min-height: 42px; margin-bottom: 2px; background: var(--header); }
+    :host([data-theme='linux']) .close {
+      width: 24px; height: 24px; margin: 0 -6px 0 auto; border-radius: 50%; background: var(--flat);
+      font-size: 15px; font-weight: 600;
+    }
+    :host([data-theme='linux']) .close:hover { background: var(--flat); color: var(--text); filter: brightness(0.92); }
+    :host([data-theme='linux']) .text { border-color: transparent; background: var(--flat); }
+    :host([data-theme='linux']) .actions button { border: 0; background: var(--flat); font-weight: 700; }
+    :host([data-theme='linux']) .actions button:hover { filter: brightness(0.95); }
+    :host([data-theme='linux']) .actions [data-action='brief'] { background: var(--accent); }
+
+    :host([data-theme='print']) .titlebar { display: none; }
     :host([data-theme='print']) .flash {
       display: block; position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none;
       animation: shutter 260ms ease-out;
@@ -198,9 +256,55 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     :host([data-theme='print']) .text:focus-visible { outline: 1px dashed var(--muted); outline-offset: 0; }
     :host([data-theme='print']) .status { font: 500 20px/1.2 var(--hand); }
 
+    .picker {
+      position: fixed; inset: 0; display: grid; place-items: center; padding: 16px;
+      background: rgba(0, 0, 0, 0.42); animation: fade-in 220ms ease-out;
+      transition: opacity 200ms ease-in;
+    }
+    .picker[hidden] { display: none; }
+    .picker.leaving { opacity: 0; }
+    .picker-window {
+      width: 640px; max-width: 100%; max-height: calc(100vh - 32px); overflow: auto; padding: 24px;
+      border-radius: calc(var(--radius) + 4px); background: var(--surface); color: var(--text);
+      box-shadow: var(--panel-shadow); font: 14px/1.5 var(--ui-font);
+      backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+      animation: window-in 440ms cubic-bezier(0.2, 1.3, 0.35, 1);
+      transition: transform 200ms ease-in;
+    }
+    .picker.leaving .picker-window { transform: scale(0.96); }
+    .picker h2 { margin: 0; font: 600 22px/1.25 var(--ui-font); }
+    :host([data-theme='print']) .picker h2 { font: 500 36px/1.15 var(--hand); }
+    .picker p { margin: 4px 0 18px; color: var(--muted); }
+    .look-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .look-card {
+      display: grid; gap: 7px; padding: 7px 7px 9px; border: 1px solid var(--line); border-radius: 10px;
+      background: transparent; color: var(--text); cursor: pointer; font: 600 13px/1.2 var(--ui-font);
+      animation: card-in 480ms cubic-bezier(0.2, 1.35, 0.35, 1) backwards;
+      animation-delay: calc(90ms + var(--order) * 65ms);
+      transition: transform 170ms cubic-bezier(0.2, 1.4, 0.4, 1), border-color 120ms, box-shadow 170ms;
+    }
+    .look-card:hover {
+      border-color: var(--accent); transform: translateY(-5px) scale(1.03);
+      box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.45);
+    }
+    .look-card:active { transform: scale(0.96); }
+    .look-card[aria-pressed='true'] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+    .look-card:focus-visible, .picker-later:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .picker-later {
+      display: block; margin: 16px 0 0 auto; padding: 5px 10px; border: 0; border-radius: var(--control-radius);
+      background: transparent; color: var(--muted); cursor: pointer; font: 500 13px/1.3 var(--ui-font);
+    }
+    .picker-later:hover { background: var(--line); color: var(--text); }
+    @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes window-in { from { opacity: 0; transform: translateY(18px) scale(0.92); } to { opacity: 1; transform: none; } }
+    @keyframes card-in { from { opacity: 0; transform: translateY(26px) scale(0.86); } to { opacity: 1; transform: none; } }
+    @media (max-width: 640px) { .look-grid { grid-template-columns: repeat(2, 1fr); } }
+    ${PREVIEW_CSS}
+
     @media (prefers-reduced-motion: reduce) {
       :host([data-theme='print']) .flash { display: none; }
-      .panel { animation: none; }
+      .panel, .picker, .picker-window, .look-card { animation: none; }
+      .picker, .picker-window, .look-card { transition: none; }
       :host([data-theme='print']) .panel[data-state='ready'] .photo,
       :host([data-theme='print']) .actions button { transition: none; }
     }
@@ -231,10 +335,10 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     <div class="size" hidden></div>
     <div class="panel" hidden>
       <div class="titlebar">
-        <button class="close" aria-label="Close">&times;</button>
+        <span class="title">Screen Select</span>
         <span class="light minimize"></span>
         <span class="light zoom"></span>
-        <span class="title">Screen Select</span>
+        <button class="close" aria-label="Close">&times;</button>
       </div>
       <canvas class="photo"></canvas>
       <textarea class="text" dir="auto" spellcheck="false" aria-label="Text from your selection"></textarea>
@@ -247,8 +351,24 @@ globalThis.__screenSelectStart = async (dataUrl) => {
         <button data-action="brief">Brief</button>
         <button data-action="search">Search</button>
         <button data-action="ask">Ask</button>
+        <button data-action="look">Look</button>
       </div>
       <div class="status" role="status"></div>
+    </div>
+    <div class="picker" hidden>
+      <div class="picker-window" role="group" aria-labelledby="picker-title">
+        <h2 id="picker-title">Choose your look</h2>
+        <p>Pick the one you like. You can change it any time with the Look button.</p>
+        <div class="look-grid">
+          ${LOOKS.map(
+            (look, order) => `
+              <button class="look-card" data-look="${look.id}" style="--order: ${order}">
+                ${cardMarkup(look.id)}${look.name}
+              </button>`,
+          ).join('')}
+        </div>
+        <button class="picker-later">Not now</button>
+      </div>
     </div>
   `;
 
@@ -264,6 +384,8 @@ globalThis.__screenSelectStart = async (dataUrl) => {
   const brief = root.querySelector('.brief');
   const status = root.querySelector('.status');
   const buttons = [...root.querySelectorAll('[data-action]')];
+  const picker = root.querySelector('.picker');
+  const lookCards = [...root.querySelectorAll('.look-card')];
 
   const bytes = Uint8Array.from(atob(dataUrl.split(',')[1]), (char) => char.charCodeAt(0));
   const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
@@ -274,14 +396,13 @@ globalThis.__screenSelectStart = async (dataUrl) => {
   lit.height = bitmap.height;
   lit.getContext('2d').drawImage(bitmap, 0, 0);
   const loadedFonts = [];
-  if (theme === 'print') {
-    root.querySelector('.flash').addEventListener('animationend', (event) => event.target.remove());
-    loadFonts();
-  }
+  root.querySelector('.flash').addEventListener('animationend', (event) => event.target.remove());
+  if (theme === 'print') loadFonts();
 
   document.documentElement.append(dialog);
+  dialog.closedBy = 'none';
   dialog.showModal();
-  dialog.addEventListener('cancel', close);
+  dialog.addEventListener('cancel', (event) => event.preventDefault());
 
   const pausedVideos = [...document.querySelectorAll('video')].filter((video) => !video.paused);
   pausedVideos.forEach((video) => video.pause());
@@ -290,7 +411,9 @@ globalThis.__screenSelectStart = async (dataUrl) => {
   const blockKey = (event) => {
     event.stopPropagation();
     event.stopImmediatePropagation();
-    if (event.type === 'keydown' && event.key === 'Escape') close();
+    if (event.type !== 'keydown' || event.key !== 'Escape') return;
+    if (picker.hidden) close();
+    else dismissPicker();
   };
   const blockMenu = (event) => event.stopPropagation();
   const keyEvents = ['keydown', 'keypress', 'keyup'];
@@ -298,6 +421,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
   window.addEventListener('contextmenu', blockMenu, true);
 
   async function loadFonts() {
+    if (loadedFonts.length) return;
     try {
       const { latin, arabic } = await chrome.runtime.sendMessage({ type: 'ss-fonts' });
       const faces = [
@@ -540,6 +664,10 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       }
     },
 
+    async look() {
+      openPicker();
+    },
+
     async search() {
       const text = textArea.value.trim();
       if (!text) return setStatus('There is no text to search for.');
@@ -554,7 +682,37 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     },
   };
 
+  function openPicker() {
+    lookCards.forEach((card) => card.setAttribute('aria-pressed', String(card.dataset.look === theme)));
+    picker.classList.remove('leaving');
+    picker.hidden = false;
+    lookCards.find((card) => card.dataset.look === theme).focus();
+  }
+
+  function hidePicker() {
+    picker.classList.add('leaving');
+    setTimeout(() => {
+      picker.hidden = true;
+    }, 200);
+  }
+
+  function dismissPicker() {
+    chrome.storage.sync.set({ lookChosen: true });
+    hidePicker();
+  }
+
+  function chooseLook(look) {
+    theme = look;
+    host.dataset.theme = look;
+    if (look === 'print') loadFonts();
+    chrome.storage.sync.set({ theme: look, lookChosen: true });
+    hidePicker();
+  }
+
+  lookCards.forEach((card) => card.addEventListener('click', () => chooseLook(card.dataset.look)));
+  root.querySelector('.picker-later').addEventListener('click', dismissPicker);
   root.querySelector('.close').addEventListener('click', close);
+  if (!saved.lookChosen) openPicker();
 
   buttons.forEach((button) => {
     button.addEventListener('click', async () => {

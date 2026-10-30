@@ -119,7 +119,7 @@ async function activate(tab) {
     if (closed) return;
 
     const dataUrl = await captureTab(tab.windowId);
-    await chrome.scripting.executeScript({ target, files: ['lib/crop.js', 'overlay.js'] });
+    await chrome.scripting.executeScript({ target, files: ['lib/crop.js', 'lib/looks.js', 'overlay.js'] });
     await chrome.scripting.executeScript({
       target,
       func: (url) => globalThis.__screenSelectStart(url),

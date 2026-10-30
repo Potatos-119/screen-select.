@@ -42,18 +42,26 @@ modelRadios.forEach((radio) => {
   radio.addEventListener('change', () => chrome.storage.sync.set({ briefModel: radio.value }));
 });
 
+const { LOOKS, PREVIEW_CSS, normalizeLook, cardMarkup } = globalThis.ScreenSelectLooks;
+
+document.head.append(Object.assign(document.createElement('style'), { textContent: PREVIEW_CSS }));
+document.getElementById('looks').innerHTML = LOOKS.map(
+  (look) => `<label>${cardMarkup(look.id)}<input type="radio" name="theme" value="${look.id}" /> ${look.name}</label>`,
+).join('');
+
 const themeRadios = document.querySelectorAll('input[name="theme"]');
 
-chrome.storage.sync.get({ theme: 'basic' }).then(({ theme }) => {
-  document.documentElement.dataset.theme = theme;
+chrome.storage.sync.get('theme').then(({ theme }) => {
+  const look = normalizeLook(theme);
+  document.documentElement.dataset.theme = look;
   themeRadios.forEach((radio) => {
-    radio.checked = radio.value === theme;
+    radio.checked = radio.value === look;
   });
 });
 
 themeRadios.forEach((radio) => {
   radio.addEventListener('change', () => {
     document.documentElement.dataset.theme = radio.value;
-    chrome.storage.sync.set({ theme: radio.value });
+    chrome.storage.sync.set({ theme: radio.value, lookChosen: true });
   });
 });

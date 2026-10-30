@@ -32,11 +32,14 @@ The key is stored only in this browser profile. Anyone with access to that profi
 
 ## Looks
 
-Choose a look in the extension's settings:
+The first time you use it, a small window asks you to choose a look. Change it any time with the **Look** button in the panel, or in the extension's settings.
 
-- **Basic:** clean and simple. This is the default, and it follows your light or dark mode.
-- **Print:** an instant print that develops while the text is read, with handwriting.
+- **Windows:** the default, following Microsoft's Fluent design.
 - **Mac:** frosted glass, window buttons and a live selection size, in the style of macOS.
+- **Linux:** a clean header bar in the style of GNOME's Adwaita.
+- **Print:** an instant print that develops while the text is read, with handwriting.
+
+Windows, Mac and Linux follow your light or dark mode. They use their real system fonts where those are installed, and your computer's default font otherwise.
 
 ## Settings
 

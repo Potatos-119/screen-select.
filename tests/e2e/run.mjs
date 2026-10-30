@@ -51,6 +51,7 @@ try {
     { timeout: 15000 },
   );
   const sw = await swTarget.worker();
+  await sw.evaluate(() => chrome.storage.sync.set({ lookChosen: true }));
 
   await check('reads the video frame fixture', async () => {
     const png = readFileSync('tests/fixtures/agent-frame.png').toString('base64');
@@ -257,17 +258,126 @@ try {
     if (process.env.THEME_SHOTS) await page.screenshot({ path: `${process.env.THEME_SHOTS}/${name}.png` });
   };
 
-  await check('Basic is the default look, with no photo or handwriting', async () => {
+  const pickerOpen = () => inShadow((root) => !root.querySelector('.picker').hidden);
+  const chooseCard = (look) =>
+    inShadow((root, id) => root.querySelector(`.look-card[data-look="${id}"]`).click(), look);
+  const settle = (ms = 350) => new Promise((resolve) => setTimeout(resolve, ms));
+  const stored = () => sw.evaluate(() => chrome.storage.sync.get(['theme', 'lookChosen']));
+
+  await check('Windows is the default look, with a title bar and no photo', async () => {
     await sw.evaluate(() => chrome.storage.sync.remove('theme'));
     await reset();
     await activate();
-    assert.equal(await hostTheme(), 'basic');
+    assert.equal(await hostTheme(), 'windows');
     await drag('#english');
     assert.match(await panelText(), /Perception is the first step/);
     assert.equal(await isShown('.photo'), false);
-    assert.equal(await isShown('.titlebar'), false);
+    assert.equal(await isShown('.titlebar'), true);
+    assert.equal(await isShown('.light'), false);
     assert.equal(await page.evaluate(() => [...document.fonts].some((f) => f.family.includes('Screen Select'))), false);
-    await shot('basic');
+    await settle();
+    await shot('windows');
+    await inShadow((root) => root.querySelector('.close').click());
+    await settle(100);
+    assert.equal(await hostCount(), 0);
+  });
+
+  await check('the first use shows the chooser', async () => {
+    await sw.evaluate(() => chrome.storage.sync.remove(['theme', 'lookChosen']));
+    await reset();
+    await activate();
+    assert.equal(await pickerOpen(), true);
+    assert.equal(await inShadow((root) => root.querySelectorAll('.look-card').length), 4);
+    assert.match(await inShadow((root) => root.querySelector('.picker h2').textContent), /Choose your look/);
+    await settle(700);
+    const seen = await inShadow((root) => {
+      const picker = root.querySelector('.picker');
+      const rect = root.querySelector('.picker-window').getBoundingClientRect();
+      const top = root.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+      return {
+        hidden: picker.hidden,
+        display: getComputedStyle(picker).display,
+        opacity: getComputedStyle(picker).opacity,
+        rect: [rect.x, rect.y, rect.width, rect.height],
+        top: top?.className,
+        insidePicker: picker.contains(top),
+      };
+    });
+    assert.equal(seen.insidePicker, true);
+    assert.equal(await inShadow((root) => getComputedStyle(root.querySelector('.look-card')).animationName), 'card-in');
+    await shot('picker');
+  });
+
+  await check('choosing a look applies it, saves it and closes the chooser', async () => {
+    const card = await inShadow((root) => {
+      const rect = root.querySelector('.look-card[data-look="linux"]').getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    });
+    await page.mouse.click(card.x, card.y);
+    await settle();
+    assert.equal(await hostTheme(), 'linux');
+    assert.equal(await pickerOpen(), false);
+    assert.deepEqual(await stored(), { theme: 'linux', lookChosen: true });
+    await page.keyboard.press('Escape');
+    await reset();
+    await activate();
+    assert.equal(await inShadow((root) => root.querySelector('.picker').hidden), true);
+    await page.keyboard.press('Escape');
+  });
+
+  await check('Not now keeps the default and does not ask again', async () => {
+    await sw.evaluate(() => chrome.storage.sync.remove(['theme', 'lookChosen']));
+    await reset();
+    await activate();
+    await inShadow((root) => root.querySelector('.picker-later').click());
+    await settle();
+    assert.equal(await pickerOpen(), false);
+    assert.equal(await hostTheme(), 'windows');
+    assert.equal((await stored()).lookChosen, true);
+    await page.keyboard.press('Escape');
+  });
+
+  await check('Escape closes only the chooser', async () => {
+    await sw.evaluate(() => chrome.storage.sync.remove('lookChosen'));
+    await reset();
+    await activate();
+    await page.keyboard.press('Escape');
+    await settle();
+    assert.equal(await hostCount(), 1);
+    assert.equal(await pickerOpen(), false);
+    assert.equal((await stored()).lookChosen, true);
+    await page.keyboard.press('Escape');
+    assert.equal(await hostCount(), 0);
+  });
+
+  await check('the Look button opens the chooser and keeps the selection', async () => {
+    await reset();
+    await activate();
+    await drag('#english');
+    const before = await panelText();
+    await clickButton('look');
+    await settle(100);
+    assert.equal(await pickerOpen(), true);
+    await chooseCard('print');
+    await settle();
+    assert.equal(await hostTheme(), 'print');
+    assert.equal(await isShown('.photo'), true);
+    assert.equal(await inShadow((root) => root.querySelector('.text').value), before);
+    await page.waitForFunction(() => document.fonts.check('24px "Screen Select Hand"'), { timeout: 5000 });
+    await page.keyboard.press('Escape');
+    await sw.evaluate(() => chrome.storage.sync.remove('theme'));
+  });
+
+  await check('Linux shows a centred title and a round close button', async () => {
+    await setTheme('linux');
+    await reset();
+    await activate();
+    await drag('#english');
+    await panelText();
+    assert.equal(await isShown('.titlebar'), true);
+    assert.equal(await isShown('.light'), false);
+    await settle();
+    await shot('linux');
     await page.keyboard.press('Escape');
   });
 
@@ -297,7 +407,7 @@ try {
 
   await check('the light versions keep their buttons on one row', async () => {
     await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
-    for (const look of ['basic', 'mac']) {
+    for (const look of ['windows', 'mac', 'linux']) {
       await setTheme(look);
       await reset();
       await activate();
@@ -328,17 +438,18 @@ try {
     await page.keyboard.press('Escape');
   });
 
-  await check('an unknown saved look falls back to Basic', async () => {
-    await setTheme('nope');
+  await check('an old Basic setting opens as Windows', async () => {
+    await setTheme('basic');
     await reset();
     await activate();
-    assert.equal(await hostTheme(), 'basic');
+    assert.equal(await hostTheme(), 'windows');
     await page.keyboard.press('Escape');
   });
 
   await check('choosing a look in settings saves it', async () => {
     const options = await browser.newPage();
     await options.goto(`chrome-extension://${new URL(sw.url()).host}/options.html`);
+    assert.equal(await options.$$eval('input[name="theme"]', (inputs) => inputs.length), 4);
     await options.click('input[value="mac"]');
     await new Promise((resolve) => setTimeout(resolve, 300));
     assert.equal(await options.$eval('html', (html) => html.dataset.theme), 'mac');

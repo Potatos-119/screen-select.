@@ -6,9 +6,10 @@
     <style>
       @font-face { font-family: 'Hand'; src: url('fonts/caveat.woff2') format('woff2'); font-weight: 500; }
       :root {
-        --page: #eceef2; --sheet: #ffffff; --text: #1d2129; --muted: #5c6470; --line: #e3e6eb;
-        --accent: #3563e9; --on-accent: #ffffff; --field: #ffffff; --radius: 14px; --control: 8px;
-        --heading: 600 26px/1.2 system-ui, -apple-system, sans-serif; --shadow: 0 16px 40px -18px rgba(0, 0, 0, 0.4);
+        --page: #e9eef5; --sheet: #f6f6f6; --text: #1b1b1b; --muted: #5d5d5d; --line: rgba(0, 0, 0, 0.1);
+        --accent: #0067c0; --on-accent: #ffffff; --field: #ffffff; --radius: 8px; --control: 4px;
+        --heading: 600 26px/1.2 'Segoe UI Variable Display', 'Segoe UI', system-ui, -apple-system, sans-serif;
+        --shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 16px 40px -18px rgba(0, 0, 0, 0.4);
         --dash: solid; --blur: none;
       }
       :root[data-theme='print'] {
@@ -23,9 +24,15 @@
         --shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.3), 0 22px 60px rgba(0, 0, 0, 0.35);
         --blur: blur(34px) saturate(180%);
       }
+      :root[data-theme='linux'] {
+        --page: #deddda; --sheet: #fafafb; --text: #1e1e22; --muted: #6a6a70; --line: rgba(0, 0, 6, 0.12);
+        --accent: #3584e4; --radius: 12px; --control: 6px;
+        --heading: 700 24px/1.2 'Adwaita Sans', Cantarell, Inter, system-ui, -apple-system, sans-serif;
+      }
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme='print']) { --text: #eef0f3; --muted: #a2a9b5; --line: rgba(255, 255, 255, 0.13); --field: rgba(255, 255, 255, 0.07); }
-        :root:not([data-theme='mac']):not([data-theme='print']) { --page: #15171b; --sheet: #1f2228; --accent: #6b8ff5; --on-accent: #10131a; }
+        :root:not([data-theme]), :root[data-theme='windows'] { --page: #141414; --sheet: #202020; --accent: #60cdff; --on-accent: #000000; }
+        :root[data-theme='linux'] { --page: #1d1d20; --sheet: #222226; }
         :root[data-theme='mac'] { --page: linear-gradient(150deg, #27303f, #3d4656); --sheet: rgba(44, 44, 48, 0.72); --accent: #0a84ff; }
       }
       * { box-sizing: border-box; }
@@ -52,25 +59,11 @@
       :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
       small { display: block; margin-top: 8px; color: var(--muted); font-size: 13px; }
       #key-status:empty { display: none; }
-      .looks { clear: both; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-      .looks label { padding: 8px; border: 1px solid var(--line); border-radius: var(--control); cursor: pointer; }
+      .looks { clear: both; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .looks label { padding: 6px; border: 1px solid var(--line); border-radius: var(--control); cursor: pointer; }
       .looks label:has(input:checked) { border-color: var(--text); box-shadow: inset 0 0 0 1px var(--text); }
-      .look { display: block; height: 62px; margin-bottom: 6px; border-radius: 4px; background: #5c6470; padding: 8px; }
-      .card { display: block; height: 100%; padding: 6px; }
-      .look-basic .card { border-radius: 5px; background: #fff; }
-      .look-basic .card::after { content: ''; display: block; width: 44%; height: 9px; margin-top: 18px; border-radius: 3px; background: #3563e9; }
-      .look-print { background: #2a2e38; }
-      .look-print .card { background: #f7f8f4; padding: 4px; }
-      .look-print .card::before { content: ''; display: block; height: 22px; background: #14161b; }
-      .look-print .card::after { content: 'hello'; display: block; color: #1c2230; font: 500 14px/1.1 'Hand', cursive; }
-      .look-mac { background: linear-gradient(150deg, #8fa8cf, #cdd6e6); }
-      .look-mac .card {
-        border-radius: 6px; background: rgba(246, 246, 248, 0.82);
-        background-image: radial-gradient(circle at 9px 9px, #ff5f57 3.2px, transparent 3.7px),
-          radial-gradient(circle at 19px 9px, #febc2e 3.2px, transparent 3.7px),
-          radial-gradient(circle at 29px 9px, #28c840 3.2px, transparent 3.7px);
-      }
-      @media (max-width: 480px) { .looks { grid-template-columns: 1fr; } }
+      .looks .preview { height: 70px; padding: 8px; margin-bottom: 6px; }
+      @media (max-width: 520px) { .looks { grid-template-columns: repeat(2, 1fr); } }
     </style>
   </head>
   <body>
@@ -78,10 +71,7 @@
     <h1>Screen Select</h1>
     <fieldset>
       <legend>Look</legend>
-      <div class="looks">
-        <label><span class="look look-basic"><span class="card"></span></span><input type="radio" name="theme" value="basic" /> Basic</label>
-        <label><span class="look look-print"><span class="card"></span></span><input type="radio" name="theme" value="print" /> Print</label>
-        <label><span class="look look-mac"><span class="card"></span></span><input type="radio" name="theme" value="mac" /> Mac</label>
+      <div class="looks" id="looks">
       </div>
     </fieldset>
     <fieldset>
@@ -105,6 +95,7 @@
       <label><input type="radio" name="askTarget" value="chatgpt" /> ChatGPT</label>
     </fieldset>
     </main>
+    <script src="lib/looks.js"></script>
     <script src="options.js"></script>
   </body>
 </html>
