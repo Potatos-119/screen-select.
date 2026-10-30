@@ -1,4 +1,10 @@
-import { briefRequestText, buildBriefRequest, describeBriefError, parseBriefResponse } from './lib/brief.js';
+import {
+  briefRequestText,
+  buildBriefRequest,
+  describeBriefError,
+  keyNameFor,
+  parseBriefResponse,
+} from './lib/brief.js';
 import { buildTranslateUrl, fallbackUrl, parseTranslateResponse, targetLang } from './lib/translate.js';
 
 const ASK_URLS = {
@@ -44,20 +50,21 @@ async function translate(text) {
 }
 
 async function brief(text, imageDataUrl) {
-  const { apiKey } = await chrome.storage.local.get('apiKey');
+  const { briefModel } = await chrome.storage.sync.get('briefModel');
+  const keyName = keyNameFor(briefModel);
+  const { [keyName]: apiKey } = await chrome.storage.local.get(keyName);
   if (!apiKey) return { noKey: true, requestText: text ? briefRequestText(text) : '' };
-  const { briefModel } = await chrome.storage.sync.get({ briefModel: 'opus' });
   const { url, init } = buildBriefRequest({ apiKey, model: briefModel, text, imageDataUrl });
 
   let response;
   try {
     response = await fetch(url, init);
   } catch {
-    return { error: 'Could not reach Claude. Check your connection and try again.' };
+    return { error: 'Could not reach the AI service. Check your connection and try again.' };
   }
   const json = await response.json().catch(() => null);
-  if (!response.ok) return { error: describeBriefError(response.status, json) };
-  return { brief: parseBriefResponse(json) };
+  if (!response.ok) return { error: describeBriefError(response.status, json, briefModel) };
+  return { brief: parseBriefResponse(json, briefModel) };
 }
 
 // The page's content security policy can block font URLs, so the overlay gets the bytes.

@@ -6,15 +6,15 @@ Select text from anything on screen in Brave, even inside a video, then copy, tr
 
 You don't need Git, npm or the Terminal.
 
-1. Download `screen-select.zip`. Get it from whoever shared it, or use the green **Code** button on GitHub, then **Download ZIP**.
+1. On this GitHub page, click the green **Code** button, then **Download ZIP**.
 2. Unzip it and move the folder somewhere permanent, such as Documents.
 3. Open `brave://extensions` in Brave and turn on **Developer mode** (top right).
-4. Click **Load unpacked** and choose the folder with `manifest.json` inside. In the GitHub download, that's the `extension` folder.
+4. Click **Load unpacked** and choose the `extension` folder inside it.
 5. Optional: click the puzzle icon in the toolbar and pin Screen Select.
 
 Keep the folder where it is. Brave loads the extension from there each time.
 
-**To update:** replace the folder with the new one, then press the reload icon on Screen Select in `brave://extensions`.
+**To update:** download it again, replace the folder, then press the reload icon on Screen Select in `brave://extensions`.
 
 ## Use
 
@@ -28,12 +28,21 @@ Translation goes both ways by itself: Arabic to English, anything else to Arabic
 
 ## Brief
 
-Brief gives you a short explanation of your selection. It works two ways:
+Brief gives you a short explanation of your selection. Choose how it works under Details, Extension options.
 
-- **With no key (free):** it copies a ready-made request and opens your chat. Paste it and send, and your Claude plan answers it. If you selected a picture with no text, it copies the picture instead.
-- **With an API key:** the answer appears in the panel, and it can read diagrams and pictures. API use is billed separately from a Claude chat plan.
+| Option | Cost | Where the answer appears |
+|---|---|---|
+| **NVIDIA DeepSeek** (default) | Free trial with limited credits | In the panel |
+| **Claude Opus or Haiku** | Paid per use, separate from a Claude chat plan | In the panel |
+| **No key** | Free, uses your chat plan | In your chat, after you paste and send |
 
-To add a key, create one at [console.anthropic.com](https://console.anthropic.com), add credit, then save it under Details, Extension options. A low spending limit is a good idea. The key is stored only in this browser profile, and anyone with access to that profile could read it.
+**Free setup with NVIDIA:**
+
+1. Create a free account at [build.nvidia.com](https://build.nvidia.com) and generate an API key.
+2. Open the extension's Details page, then Extension options.
+3. Paste the key under **Your NVIDIA API key** and click **Save NVIDIA key**.
+
+Keys are stored only in this browser profile, and anyone with access to that profile could read them. Your selection is sent to the service you chose, and only when you press Brief.
 
 ## Looks
 
@@ -58,7 +67,7 @@ Windows, Mac and Linux follow your light or dark mode. They use their real syste
 - Blurry, tiny or stylised text can be misread, and Arabic more often than English. Fix it in the panel.
 - Copy image needs an `https` page.
 - Videos embedded from another site may keep playing while you select.
-- Translate sends the panel text to Google, and Brief sends your selection to Anthropic, only when you press them. Everything else stays on your computer.
+- Translate sends the panel text to Google, and Brief sends your selection to the AI service you chose, only when you press them. Everything else stays on your computer.
 
 ## Fonts
 
@@ -71,7 +80,4 @@ npm install
 npm run vendor
 npm test
 npm run e2e
-npm run package
 ```
-
-`npm run package` writes `dist/screen-select.zip`, ready to share or to upload to the Chrome Web Store.

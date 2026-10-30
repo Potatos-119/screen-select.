@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
+  keyNameFor,
   buildBriefRequest,
   parseBriefResponse,
   describeBriefError,
@@ -12,7 +14,7 @@ const request = (overrides = {}) =>
     apiKey: 'test-key',
     model: 'opus',
     text: 'an agent perceives its environment',
-    imageDataUrl: 'data:image/png;base64,QUJD',
+    imageDataUrl: 'data:image/jpeg;base64,QUJD',
     ...overrides,
   });
 
@@ -30,7 +32,7 @@ test('sends both the picture and the text', () => {
   const [image, text] = body.messages[0].content;
   assert.deepEqual(image, {
     type: 'image',
-    source: { type: 'base64', media_type: 'image/png', data: 'QUJD' },
+    source: { type: 'base64', media_type: 'image/jpeg', data: 'QUJD' },
   });
   assert.match(text.text, /an agent perceives its environment/);
 });
@@ -57,8 +59,8 @@ test('Haiku leaves the fallback option off', () => {
   assert.equal(init.headers['anthropic-beta'], undefined);
 });
 
-test('an unknown model falls back to Opus', () => {
-  assert.equal(JSON.parse(request({ model: 'nope' }).init.body).model, 'claude-opus-5-5');
+test('an unknown model falls back to the free option', () => {
+  assert.equal(JSON.parse(request({ model: 'nope' }).init.body).model, 'deepseek-ai/deepseek-v4.1-flash');
 });
 
 test('page content is marked as data, not instructions', () => {
@@ -76,18 +78,18 @@ test('reads only the text blocks of a reply', () => {
       { type: 'text', text: 'Second.' },
     ],
   };
-  assert.equal(parseBriefResponse(reply), 'First. Second.');
+  assert.equal(parseBriefResponse(reply, 'opus'), 'First. Second.');
 });
 
 test('a declined request gives a clear error', () => {
   assert.throws(
-    () => parseBriefResponse({ stop_reason: 'refusal', content: [] }),
+    () => parseBriefResponse({ stop_reason: 'refusal', content: [] }, 'opus'),
     /declined/i,
   );
 });
 
 test('an empty reply gives a clear error', () => {
-  assert.throws(() => parseBriefResponse({ stop_reason: 'end_turn', content: [] }), /empty/i);
+  assert.throws(() => parseBriefResponse({ stop_reason: 'end_turn', content: [] }, 'opus'), /empty/i);
 });
 
 test('explains each API failure', () => {
@@ -105,4 +107,59 @@ test('the request for the chat holds the selection', () => {
   const text = briefRequestText('an agent perceives');
   assert.match(text, /plain sentences/);
   assert.match(text, /an agent perceives/);
+});
+
+const nvidia = () => request({ model: 'nvidia' });
+
+test('NVIDIA uses its own address, key header and model', () => {
+  const { url, init } = nvidia();
+  assert.equal(url, 'https://integrate.api.nvidia.com/v1/chat/completions');
+  assert.equal(init.headers.authorization, 'Bearer test-key');
+  assert.equal(init.headers['x-api-key'], undefined);
+  assert.equal(JSON.parse(init.body).model, 'deepseek-ai/deepseek-v4.1-flash');
+});
+
+test('NVIDIA gets the picture and text in its own format', () => {
+  const { messages } = JSON.parse(nvidia().init.body);
+  assert.equal(messages[0].role, 'system');
+  assert.match(messages[0].content, /not instructions/i);
+  const [text, image] = messages[1].content;
+  assert.match(text.text, /<selection>/);
+  assert.deepEqual(image, {
+    type: 'image_url',
+    image_url: { url: 'data:image/jpeg;base64,QUJD' },
+  });
+});
+
+test('reads the NVIDIA reply', () =>
+  assert.equal(
+    parseBriefResponse({ choices: [{ message: { content: ' A brief. ' } }] }, 'nvidia'),
+    'A brief.',
+  ));
+
+test('an empty NVIDIA reply gives a clear error', () =>
+  assert.throws(() => parseBriefResponse({ choices: [] }, 'nvidia'), /empty/i));
+
+test('NVIDIA failures name NVIDIA and say what to do', () => {
+  assert.match(describeBriefError(401, null, 'nvidia'), /NVIDIA rejected your API key/);
+  assert.match(describeBriefError(402, null, 'nvidia'), /credits/i);
+  assert.match(describeBriefError(404, null, 'nvidia'), /model/i);
+  assert.match(describeBriefError(400, { detail: 'Bad image' }, 'nvidia'), /Bad image/);
+});
+
+test('each provider keeps its own key', () => {
+  assert.equal(keyNameFor('nvidia'), 'nvidiaKey');
+  assert.equal(keyNameFor('opus'), 'apiKey');
+  assert.equal(keyNameFor('haiku'), 'apiKey');
+  assert.equal(keyNameFor(undefined), 'nvidiaKey');
+});
+
+test('the extension may reach NVIDIA', () => {
+  const manifest = JSON.parse(readFileSync('extension/manifest.json'));
+  assert.ok(manifest.host_permissions.includes('https://integrate.api.nvidia.com/*'));
+});
+
+test('with no saved choice, the reply is read the same way the request was sent', () => {
+  assert.equal(parseBriefResponse({ choices: [{ message: { content: 'Hi' } }] }), 'Hi');
+  assert.match(describeBriefError(401), /NVIDIA/);
 });

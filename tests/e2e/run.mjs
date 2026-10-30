@@ -581,11 +581,11 @@ try {
       status,
       JSON.stringify(body),
     );
-  const clearKey = () => sw.evaluate(() => chrome.storage.local.remove('apiKey'));
+  const clearKey = () => sw.evaluate(() => chrome.storage.local.remove(['apiKey', 'nvidiaKey']));
 
   await check('Brief without a key copies a request and opens the chat', async () => {
     await clearKey();
-    await sw.evaluate(() => chrome.storage.sync.remove('askTarget'));
+    await sw.evaluate(() => chrome.storage.sync.remove(['askTarget', 'briefModel']));
     await reset();
     await activate();
     await drag('#english');
@@ -609,6 +609,7 @@ try {
     await options.close();
     await page.bringToFront();
 
+    await sw.evaluate(() => chrome.storage.sync.set({ briefModel: 'opus' }));
     await stubBrief(200, {
       stop_reason: 'end_turn',
       content: [{ type: 'text', text: 'A short brief.' }],
@@ -623,7 +624,7 @@ try {
     assert.equal(call.url, 'https://api.anthropic.com/v1/messages');
     assert.equal(call.init.headers['x-api-key'], 'test-key');
     const body = JSON.parse(call.init.body);
-    assert.equal(body.messages[0].content[0].type, 'image');
+    assert.equal(body.messages[0].content[0].source.media_type, 'image/jpeg');
     assert.match(body.messages[0].content[1].text, /Perception is the first step/);
     if (process.env.BRIEF_SHOT) await page.screenshot({ path: process.env.BRIEF_SHOT });
   });
@@ -650,6 +651,47 @@ try {
     await sw.evaluate(() => {
       globalThis.fetch = globalThis.__realFetch;
     });
+    await clearKey();
+    await page.keyboard.press('Escape');
+  });
+
+  await check('the free NVIDIA setup gives a brief in the panel', async () => {
+    await sw.evaluate(() => chrome.storage.sync.remove('briefModel'));
+    const options = await browser.newPage();
+    await options.goto(`chrome-extension://${new URL(sw.url()).host}/options.html`);
+    assert.equal(await options.$eval('input[value="nvidia"]', (radio) => radio.checked), true);
+    await options.type('#nvidia-key', 'test-key');
+    await options.click('#save-nvidia-key');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(await sw.evaluate(async () => (await chrome.storage.local.get('nvidiaKey')).nvidiaKey), 'test-key');
+    assert.equal(await sw.evaluate(async () => (await chrome.storage.sync.get('nvidiaKey')).nvidiaKey), undefined);
+    await options.close();
+
+    await reset();
+    await activate();
+    await drag('#english');
+    await panelText();
+    await stubBrief(200, { choices: [{ message: { content: 'Free brief.' } }] });
+    await clickButton('brief');
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    assert.equal(await inShadow((root) => root.querySelector('.brief').textContent), 'Free brief.');
+    const call = await sw.evaluate(() => globalThis.__briefCalls[0]);
+    assert.equal(call.url, 'https://integrate.api.nvidia.com/v1/chat/completions');
+    assert.equal(call.init.headers.authorization, 'Bearer test-key');
+    const image = JSON.parse(call.init.body).messages[1].content[1].image_url.url;
+    assert.match(image, /^data:image\/jpeg;base64,/);
+  });
+
+  await check('the real NVIDIA server answers and a wrong key is explained', async () => {
+    await sw.evaluate(() => {
+      globalThis.fetch = globalThis.__realFetch;
+    });
+    await clickButton('brief');
+    await page.waitForFunction(
+      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.status').textContent.includes('NVIDIA'),
+      { timeout: 20000 },
+    );
+    assert.match(await status(), /NVIDIA rejected your API key/);
     await clearKey();
     await page.keyboard.press('Escape');
   });

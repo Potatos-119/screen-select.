@@ -58,7 +58,7 @@
       }
       :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
       small { display: block; margin-top: 8px; color: var(--muted); font-size: 13px; }
-      #key-status:empty { display: none; }
+      #key-status:empty, #nvidia-key-status:empty { display: none; }
       .looks { clear: both; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
       .looks label { padding: 6px; border: 1px solid var(--line); border-radius: var(--control); cursor: pointer; }
       .looks label:has(input:checked) { border-color: var(--text); box-shadow: inset 0 0 0 1px var(--text); }
@@ -75,20 +75,28 @@
       </div>
     </fieldset>
     <fieldset>
-      <legend>Your Claude API key</legend>
-      <input id="api-key" type="password" autocomplete="off" spellcheck="false" aria-label="Claude API key" />
-      <button id="save-key">Save key</button>
-      <small id="key-status" role="status"></small>
+      <legend>Brief uses</legend>
+      <label><input type="radio" name="briefModel" value="nvidia" /> NVIDIA DeepSeek (free trial)</label>
+      <label><input type="radio" name="briefModel" value="opus" /> Claude Opus 5.5 (paid, best answers)</label>
+      <label><input type="radio" name="briefModel" value="haiku" /> Claude Haiku 5.5 (paid, much cheaper)</label>
       <small>
-        Optional. Without a key, Brief copies a request and opens your chat, so your Claude plan can answer it. A key
-        shows the answer in the panel, and API use is billed separately at console.anthropic.com. The key is stored
-        only in this browser profile, and your selection is sent to Anthropic only when you press Brief.
+        With no key, Brief copies a request and opens your chat. With a key, the answer appears in the panel. Your
+        selection is sent to the service you choose only when you press Brief.
       </small>
     </fieldset>
     <fieldset>
-      <legend>Brief uses</legend>
-      <label><input type="radio" name="briefModel" value="opus" /> Claude Opus 5.5 (best answers)</label>
-      <label><input type="radio" name="briefModel" value="haiku" /> Claude Haiku 5.5 (much cheaper)</label>
+      <legend>Your NVIDIA API key</legend>
+      <input id="nvidia-key" type="password" autocomplete="off" spellcheck="false" aria-label="NVIDIA API key" />
+      <button id="save-nvidia-key">Save NVIDIA key</button>
+      <small id="nvidia-key-status" role="status"></small>
+      <small>Create a free key at build.nvidia.com. It is stored only in this browser profile.</small>
+    </fieldset>
+    <fieldset>
+      <legend>Your Claude API key</legend>
+      <input id="api-key" type="password" autocomplete="off" spellcheck="false" aria-label="Claude API key" />
+      <button id="save-key">Save Claude key</button>
+      <small id="key-status" role="status"></small>
+      <small>Create a key at console.anthropic.com. API use is billed separately from a Claude chat plan.</small>
     </fieldset>
     <fieldset>
       <legend>Ask opens</legend>

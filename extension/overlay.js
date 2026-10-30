@@ -4,6 +4,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
   const saved = await chrome.storage.sync.get(['theme', 'lookChosen']);
   let theme = normalizeLook(saved.theme);
   const BRIEF_IMAGE_MAX_EDGE = 1568;
+  const BRIEF_IMAGE_QUALITY = 0.8;
 
   const STYLE = `
     :host {
@@ -500,14 +501,14 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     return canvas;
   }
 
-  async function toDataUrl(canvas) {
-    const blob = await canvas.convertToBlob({ type: 'image/png' });
+  async function toDataUrl(canvas, type = 'image/png', quality) {
+    const blob = await canvas.convertToBlob({ type, quality });
     const buffer = new Uint8Array(await blob.arrayBuffer());
     let binary = '';
     for (let i = 0; i < buffer.length; i += 0x8000) {
       binary += String.fromCharCode(...buffer.subarray(i, i + 0x8000));
     }
-    return `data:image/png;base64,${btoa(binary)}`;
+    return `data:${type};base64,${btoa(binary)}`;
   }
 
   async function readSelection(rect) {
@@ -659,7 +660,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       const result = await chrome.runtime.sendMessage({
         type: 'ss-brief',
         text: textArea.value.trim(),
-        imageDataUrl: await toDataUrl(image),
+        imageDataUrl: await toDataUrl(image, 'image/jpeg', BRIEF_IMAGE_QUALITY),
       });
       if (result?.noKey) {
         const copied = result.requestText ? await copyText(result.requestText) : await copyImage();

@@ -10,29 +10,34 @@ radios.forEach((radio) => {
   radio.addEventListener('change', () => chrome.storage.sync.set({ askTarget: radio.value }));
 });
 
-const keyInput = document.getElementById('api-key');
-const keyStatus = document.getElementById('key-status');
 const modelRadios = document.querySelectorAll('input[name="briefModel"]');
 
-function showKeyState(hasKey) {
-  keyInput.value = '';
-  keyInput.placeholder = hasKey ? 'A key is saved. Paste a new one to replace it.' : 'Paste your API key';
+function wireKey({ inputId, buttonId, statusId, storageKey }) {
+  const input = document.getElementById(inputId);
+  const status = document.getElementById(statusId);
+  const showState = (hasKey) => {
+    input.value = '';
+    input.placeholder = hasKey ? 'A key is saved. Paste a new one to replace it.' : 'Paste your API key';
+  };
+
+  chrome.storage.local.get(storageKey).then((saved) => showState(Boolean(saved[storageKey])));
+
+  document.getElementById(buttonId).addEventListener('click', async () => {
+    const value = input.value.trim();
+    if (!value) {
+      status.textContent = 'Paste a key first.';
+      return;
+    }
+    await chrome.storage.local.set({ [storageKey]: value });
+    showState(true);
+    status.textContent = 'Saved.';
+  });
 }
 
-chrome.storage.local.get('apiKey').then(({ apiKey }) => showKeyState(Boolean(apiKey)));
+wireKey({ inputId: 'nvidia-key', buttonId: 'save-nvidia-key', statusId: 'nvidia-key-status', storageKey: 'nvidiaKey' });
+wireKey({ inputId: 'api-key', buttonId: 'save-key', statusId: 'key-status', storageKey: 'apiKey' });
 
-document.getElementById('save-key').addEventListener('click', async () => {
-  const apiKey = keyInput.value.trim();
-  if (!apiKey) {
-    keyStatus.textContent = 'Paste a key first.';
-    return;
-  }
-  await chrome.storage.local.set({ apiKey });
-  showKeyState(true);
-  keyStatus.textContent = 'Saved.';
-});
-
-chrome.storage.sync.get({ briefModel: 'opus' }).then(({ briefModel }) => {
+chrome.storage.sync.get({ briefModel: 'nvidia' }).then(({ briefModel }) => {
   modelRadios.forEach((radio) => {
     radio.checked = radio.value === briefModel;
   });
