@@ -799,22 +799,14 @@ try {
     assert.match(await status(), /NVIDIA took too long/);
   });
 
-  await check('GPT-OSS explains that it needs text', async () => {
-    await stubBrief(200, { choices: [{ message: { content: 'Should not be used.' } }] });
-    await sw.evaluate(() => chrome.storage.sync.set({ briefModel: 'gptoss' }));
-    const original = await inShadow((root) => root.querySelector('.text').value);
-    await inShadow((root) => {
-      root.querySelector('.text').value = '';
-    });
-    await clickButton('brief');
-    await page.waitForFunction(
-      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.status').textContent.includes('text only'),
-      { timeout: 5000 },
-    );
-    assert.equal(await sw.evaluate(() => globalThis.__briefCalls.length), 0);
-    await inShadow((root, text) => {
-      root.querySelector('.text').value = text;
-    }, original);
+  await check('a removed Brief option shows the default in settings', async () => {
+    await sw.evaluate(() => chrome.storage.sync.set({ briefModel: 'deepseek' }));
+    const options = await browser.newPage();
+    await options.goto(`chrome-extension://${new URL(sw.url()).host}/options.html`);
+    await options.waitForFunction(() => document.querySelector('input[name="briefModel"]:checked'));
+    assert.equal(await options.$eval('input[name="briefModel"]:checked', (radio) => radio.value), 'nvidia');
+    await options.close();
+    await page.bringToFront();
     await sw.evaluate(() => chrome.storage.sync.remove('briefModel'));
   });
 

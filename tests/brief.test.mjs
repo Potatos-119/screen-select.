@@ -6,7 +6,6 @@ import {
   keyNameFor,
   providerFor,
   describeBriefTimeout,
-  isTextOnly,
   buildBriefRequest,
   parseBriefResponse,
   describeBriefError,
@@ -123,38 +122,27 @@ test('NVIDIA uses its own address, key header and model', () => {
   assert.equal(JSON.parse(init.body).model, 'nvidia/nemotron-3.5-super-vl-120b-a12b');
 });
 
-test('DeepSeek stays available on the same NVIDIA key', () => {
-  const { url, init } = request({ model: 'deepseek' });
-  assert.equal(url, 'https://integrate.api.nvidia.com/v1/chat/completions');
-  assert.equal(JSON.parse(init.body).model, 'deepseek-ai/deepseek-v4.1-flash');
-  assert.equal(keyNameFor('deepseek'), 'nvidiaKey');
+test('a saved choice that was removed goes back to the default', () => {
+  for (const model of ['deepseek', 'gptoss']) {
+    assert.equal(JSON.parse(request({ model }).init.body).model, 'nvidia/nemotron-3.5-super-vl-120b-a12b');
+    assert.equal(keyNameFor(model), 'nvidiaKey');
+  }
 });
 
-test('the default model answers without thinking first, and DeepSeek is left as it is', () => {
+test('the default model answers without thinking first', () => {
   assert.equal(JSON.parse(nvidia().init.body).chat_template_kwargs.enable_thinking, false);
-  assert.equal(JSON.parse(request({ model: 'deepseek' }).init.body).chat_template_kwargs, undefined);
-});
-
-test('GPT-OSS gets the text and no picture', () => {
-  const body = JSON.parse(request({ model: 'gptoss' }).init.body);
-  assert.equal(body.model, 'openai/gpt-oss-20b');
-  assert.equal(body.messages[1].content.length, 1);
-  assert.equal(body.messages[1].content[0].type, 'text');
-  assert.equal(keyNameFor('gptoss'), 'nvidiaKey');
-  assert.equal(isTextOnly('gptoss'), true);
-  assert.equal(isTextOnly('nvidia'), false);
 });
 
 test('every Brief option can be picked in settings', () => {
   const page = readFileSync('extension/options.html', 'utf8');
-  for (const model of ['nvidia', 'deepseek', 'gptoss', 'opus', 'haiku']) {
+  for (const model of ['nvidia', 'opus', 'haiku']) {
     assert.match(page, new RegExp(`name="briefModel" value="${model}"`));
   }
 });
 
 test('a slow answer gives up in time and says so', () => {
   assert.ok(BRIEF_TIMEOUT_MS < 30000);
-  assert.match(describeBriefTimeout('deepseek'), /NVIDIA took too long/);
+  assert.match(describeBriefTimeout('nvidia'), /NVIDIA took too long/);
 });
 
 test('NVIDIA gets the picture and text in its own format', () => {

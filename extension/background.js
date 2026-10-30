@@ -4,7 +4,6 @@ import {
   buildBriefRequest,
   describeBriefError,
   describeBriefTimeout,
-  isTextOnly,
   keyNameFor,
   parseBriefResponse,
   providerFor,
@@ -68,9 +67,6 @@ async function brief(text, imageDataUrl) {
   const { [keyName]: apiKey } = await chrome.storage.local.get(keyName);
   if (!apiKey) {
     return { noKey: true, provider: providerFor(briefModel), requestText: text ? briefRequestText(text) : '' };
-  }
-  if (!text && isTextOnly(briefModel)) {
-    return { error: 'GPT-OSS reads text only, and no text was found here. Choose another option in the extension settings.' };
   }
   const { url, init } = buildBriefRequest({ apiKey, model: briefModel, text, imageDataUrl });
 

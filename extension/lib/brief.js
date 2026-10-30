@@ -15,8 +15,6 @@ const MODELS = {
     id: 'nvidia/nemotron-3.5-super-vl-120b-a12b',
     options: { chat_template_kwargs: { enable_thinking: false } },
   },
-  deepseek: { provider: 'NVIDIA', keyName: 'nvidiaKey', id: 'deepseek-ai/deepseek-v4.1-flash' },
-  gptoss: { provider: 'NVIDIA', keyName: 'nvidiaKey', id: 'openai/gpt-oss-20b', textOnly: true },
   opus: { provider: 'Claude', keyName: 'apiKey', id: 'claude-opus-5-5', fallbacks: true },
   haiku: { provider: 'Claude', keyName: 'apiKey', id: 'claude-haiku-5-5', fallbacks: false },
 };
@@ -43,13 +41,7 @@ export function providerFor(model) {
   return modelFor(model).provider;
 }
 
-export function isTextOnly(model) {
-  return Boolean(modelFor(model).textOnly);
-}
-
 function buildNvidiaRequest({ apiKey, model, text, imageDataUrl }) {
-  const content = [{ type: 'text', text: `<selection>\n${text}\n</selection>` }];
-  if (!modelFor(model).textOnly) content.push({ type: 'image_url', image_url: { url: imageDataUrl } });
   const body = {
     model: modelFor(model).id,
     max_tokens: MAX_TOKENS,
@@ -57,7 +49,13 @@ function buildNvidiaRequest({ apiKey, model, text, imageDataUrl }) {
     ...modelFor(model).options,
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: `<selection>\n${text}\n</selection>` },
+          { type: 'image_url', image_url: { url: imageDataUrl } },
+        ],
+      },
     ],
   };
   return {

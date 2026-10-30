@@ -37,11 +37,9 @@ Brief explains what you selected in a few sentences, right there in the panel. I
 | Option | Cost |
 |---|---|
 | NVIDIA Nemotron (default) | Free trial with limited credits |
-| NVIDIA DeepSeek | Same free trial and same key |
-| NVIDIA GPT-OSS | Same free trial and same key, but it can't see pictures |
 | Claude Opus or Haiku | Paid per use, separate from a Claude chat plan |
 
-Nemotron is the default because it's fast and it can see the picture. DeepSeek is still there, but when I tried it, it didn't answer at all. GPT-OSS worked for me but it's slow, and sometimes it hits the 25 second limit.
+I tried a few of NVIDIA's free models and kept Nemotron because it's fast and it can see the picture.
 
 To set up the free one:
 

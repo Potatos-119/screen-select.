@@ -38,8 +38,10 @@ wireKey({ inputId: 'nvidia-key', buttonId: 'save-nvidia-key', statusId: 'nvidia-
 wireKey({ inputId: 'api-key', buttonId: 'save-key', statusId: 'key-status', storageKey: 'apiKey' });
 
 chrome.storage.sync.get({ briefModel: 'nvidia' }).then(({ briefModel }) => {
+  // A choice saved before an option was removed falls back to the default.
+  const known = [...modelRadios].some((radio) => radio.value === briefModel);
   modelRadios.forEach((radio) => {
-    radio.checked = radio.value === briefModel;
+    radio.checked = radio.value === (known ? briefModel : 'nvidia');
   });
 });
 
