@@ -63,6 +63,22 @@ async function brief(text, imageDataUrl) {
   return { brief: parseBriefResponse(json) };
 }
 
+// The page's content security policy can block font URLs, so the overlay gets the bytes.
+async function readFont(name) {
+  const response = await fetch(chrome.runtime.getURL(`fonts/${name}.woff2`));
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
+
+async function fonts() {
+  const [latin, arabic] = await Promise.all([readFont('caveat'), readFont('aref-ruqaa')]);
+  return { latin, arabic };
+}
+
 async function ask() {
   const { askTarget } = await chrome.storage.sync.get({ askTarget: 'claude' });
   await chrome.tabs.create({ url: ASK_URLS[askTarget] ?? ASK_URLS.claude });
@@ -123,6 +139,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     'ss-recognize': () => recognize(message.dataUrl),
     'ss-translate': () => translate(message.text),
     'ss-brief': () => brief(message.text, message.imageDataUrl),
+    'ss-fonts': fonts,
     'ss-search': () => chrome.search.query({ text: message.text, disposition: 'NEW_TAB' }),
     'ss-ask': ask,
   };

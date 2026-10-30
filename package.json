@@ -8,6 +8,8 @@
     "e2e": "node tests/e2e/run.mjs"
   },
   "devDependencies": {
+    "@fontsource/aref-ruqaa": "5.3.0",
+    "@fontsource/caveat": "5.3.0",
     "@tesseract.js-data/ara": "1.0.0",
     "@tesseract.js-data/eng": "1.0.0",
     "puppeteer-core": "24.10.0",

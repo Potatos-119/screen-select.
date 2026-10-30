@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Screen Select",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Select text from anything on screen, even videos, then copy, translate, search or ask AI.",
   "permissions": ["activeTab", "scripting", "offscreen", "clipboardWrite", "search", "storage"],
   "host_permissions": ["https://translate.googleapis.com/*", "https://api.anthropic.com/*"],

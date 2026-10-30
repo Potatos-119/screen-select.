@@ -3,44 +3,85 @@ globalThis.__screenSelectStart = async (dataUrl) => {
   const BRIEF_IMAGE_MAX_EDGE = 1568;
 
   const STYLE = `
-    * { box-sizing: border-box; }
-    .frame { position: fixed; inset: 0; width: 100vw; height: 100vh; cursor: crosshair; display: block; }
-    .hint {
-      position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
-      padding: 8px 14px; border-radius: 999px; background: #16181f; color: #f2f3f5;
-      font: 13px/1.3 system-ui, sans-serif; pointer-events: none;
+    :host {
+      --paper: #f7f8f4;
+      --ink: #1c2230;
+      --ink-soft: #4a5163;
+      --marker: #ffe94a;
+      --slip: #fff3a3;
+      --hand: 'Screen Select Hand', 'Screen Select Hand Arabic', Noteworthy, 'Segoe Print', 'Geeza Pro', cursive;
     }
+    * { box-sizing: border-box; }
+    .frame, .lit { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+    .frame { cursor: crosshair; filter: grayscale(0.92) brightness(0.48); }
+    .lit { pointer-events: none; clip-path: inset(100%); }
+    .flash {
+      position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none;
+      animation: shutter 260ms ease-out;
+    }
+    @keyframes shutter { from { opacity: 0.85; } to { opacity: 0; } }
+    .hint {
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%) rotate(-1.4deg);
+      padding: 4px 16px 6px; background: var(--paper); color: var(--ink);
+      font: 500 23px/1.2 var(--hand); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); pointer-events: none;
+    }
+    .hint[hidden], .box[hidden], .panel[hidden] { display: none; }
     .box {
-      position: fixed; border: 2px solid #8ab4ff; pointer-events: none;
-      box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.4);
+      position: fixed; pointer-events: none;
+      --corner: linear-gradient(var(--marker), var(--marker));
+      background:
+        var(--corner) 0 0 / 20px 3px, var(--corner) 0 0 / 3px 20px,
+        var(--corner) 100% 0 / 20px 3px, var(--corner) 100% 0 / 3px 20px,
+        var(--corner) 0 100% / 20px 3px, var(--corner) 0 100% / 3px 20px,
+        var(--corner) 100% 100% / 20px 3px, var(--corner) 100% 100% / 3px 20px;
+      background-repeat: no-repeat;
     }
     .panel {
-      position: fixed; width: 500px; max-width: calc(100vw - 32px); max-height: calc(100vh - 16px);
-      overflow: auto; padding: 12px;
-      display: grid; gap: 8px; border-radius: 10px; background: #16181f; color: #f2f3f5;
-      border: 1px solid #343845; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
-      font: 14px/1.4 system-ui, sans-serif;
+      position: fixed; width: 430px; max-width: calc(100vw - 32px); max-height: calc(100vh - 16px);
+      overflow: auto; padding: 14px 14px 12px; display: grid; gap: 10px;
+      border-radius: 3px; background: var(--paper); color: var(--ink);
+      box-shadow: 0 1px 1px rgba(20, 24, 34, 0.3), 0 22px 44px -10px rgba(0, 0, 0, 0.6);
+      font: 15px/1.45 system-ui, sans-serif;
+      animation: eject 420ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
     }
-    .panel[hidden] { display: none; }
+    @keyframes eject {
+      from { opacity: 0; transform: translateY(-22px) rotate(-2.5deg); }
+      to { opacity: 1; transform: none; }
+    }
+    .photo {
+      display: block; width: 100%; height: auto; max-height: 170px; object-fit: contain;
+      background: #14161b;
+    }
+    .panel[data-state='reading'] .photo { filter: brightness(0.22) sepia(0.7) contrast(0.75); }
+    .panel[data-state='ready'] .photo { filter: none; transition: filter 1.5s ease-out; }
     .text {
-      width: 100%; min-height: 96px; max-height: 40vh; padding: 8px; resize: vertical;
-      border: 1px solid #343845; border-radius: 6px; background: #0f1116; color: inherit; font: inherit;
+      width: 100%; min-height: 54px; max-height: 36vh; padding: 2px 4px; resize: vertical;
+      border: 0; border-radius: 2px; background: transparent; color: inherit;
+      font: 500 24px/1.22 var(--hand);
     }
     .translation, .brief {
-      max-height: 30vh; overflow: auto; padding: 8px; border-radius: 6px; background: #20242f;
-      white-space: pre-wrap; user-select: text;
+      max-height: 28vh; overflow: auto; padding: 8px 10px; white-space: pre-wrap; user-select: text;
     }
+    .translation { border-top: 1px dashed var(--ink-soft); font: 500 22px/1.3 var(--hand); }
+    .brief { background: var(--slip); }
     .translation:empty, .brief:empty { display: none; }
-    .actions { display: flex; flex-wrap: wrap; gap: 6px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 4px 12px; }
     button {
-      padding: 6px 10px; border: 1px solid #343845; border-radius: 6px; background: #252936;
-      color: inherit; font: inherit; cursor: pointer;
+      padding: 3px 3px; border: 0; color: var(--ink); cursor: pointer;
+      font: 600 14px/1.3 system-ui, sans-serif;
+      background: linear-gradient(var(--marker), var(--marker)) no-repeat 0 100% / 0 100%;
+      transition: background-size 170ms ease-out;
     }
-    button:hover { background: #30364a; }
-    button:focus-visible, .text:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 1px; }
-    button:disabled { opacity: 0.5; cursor: default; }
-    .status { color: #aeb4c2; font-size: 13px; }
+    button:hover { background-size: 100% 100%; }
+    button:focus-visible, .text:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+    button:disabled { color: var(--ink-soft); cursor: default; }
+    .status { color: var(--ink-soft); font: 500 20px/1.2 var(--hand); }
     .status:empty { display: none; }
+    @media (prefers-reduced-motion: reduce) {
+      .flash { display: none; }
+      .panel { animation: none; }
+      .panel[data-state='ready'] .photo, button { transition: none; }
+    }
   `;
 
   const host = document.createElement('div');
@@ -60,9 +101,12 @@ globalThis.__screenSelectStart = async (dataUrl) => {
   root.innerHTML = `
     <style>${STYLE}</style>
     <canvas class="frame"></canvas>
-    <div class="hint">Drag over what you want. Esc to cancel.</div>
+    <canvas class="lit"></canvas>
+    <div class="flash"></div>
+    <div class="hint">Drag over anything. Esc cancels.</div>
     <div class="box" hidden></div>
     <div class="panel" hidden>
+      <canvas class="photo"></canvas>
       <textarea class="text" dir="auto" spellcheck="false" aria-label="Text from your selection"></textarea>
       <div class="translation" dir="auto"></div>
       <div class="brief" dir="auto"></div>
@@ -79,6 +123,8 @@ globalThis.__screenSelectStart = async (dataUrl) => {
   `;
 
   const frame = root.querySelector('.frame');
+  const lit = root.querySelector('.lit');
+  const photo = root.querySelector('.photo');
   const hint = root.querySelector('.hint');
   const box = root.querySelector('.box');
   const panel = root.querySelector('.panel');
@@ -93,6 +139,12 @@ globalThis.__screenSelectStart = async (dataUrl) => {
   frame.width = bitmap.width;
   frame.height = bitmap.height;
   frame.getContext('2d', { willReadFrequently: true }).drawImage(bitmap, 0, 0);
+  lit.width = bitmap.width;
+  lit.height = bitmap.height;
+  lit.getContext('2d').drawImage(bitmap, 0, 0);
+  root.querySelector('.flash').addEventListener('animationend', (event) => event.target.remove());
+  const loadedFonts = [];
+  loadFonts();
 
   document.documentElement.append(dialog);
   dialog.showModal();
@@ -112,11 +164,30 @@ globalThis.__screenSelectStart = async (dataUrl) => {
   keyEvents.forEach((type) => window.addEventListener(type, blockKey, true));
   window.addEventListener('contextmenu', blockMenu, true);
 
+  async function loadFonts() {
+    try {
+      const { latin, arabic } = await chrome.runtime.sendMessage({ type: 'ss-fonts' });
+      const faces = [
+        ['Screen Select Hand', latin],
+        ['Screen Select Hand Arabic', arabic],
+      ];
+      for (const [name, data] of faces) {
+        const bytes = Uint8Array.from(atob(data), (char) => char.charCodeAt(0));
+        const face = await new FontFace(name, bytes).load();
+        document.fonts.add(face);
+        loadedFonts.push(face);
+      }
+    } catch {
+      // The handwriting is decoration, so the system fonts in --hand take over.
+    }
+  }
+
   function close() {
     keyEvents.forEach((type) => window.removeEventListener(type, blockKey, true));
     window.removeEventListener('contextmenu', blockMenu, true);
     pausedVideos.forEach((video) => video.play().catch(() => {}));
     dialog.remove();
+    loadedFonts.forEach((face) => document.fonts.delete(face));
     delete globalThis.__screenSelect;
   }
 
@@ -138,6 +209,9 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     box.style.top = `${rect.y}px`;
     box.style.width = `${rect.width}px`;
     box.style.height = `${rect.height}px`;
+    const right = innerWidth - rect.x - rect.width;
+    const bottom = innerHeight - rect.y - rect.height;
+    lit.style.clipPath = `inset(${rect.y}px ${right}px ${bottom}px ${rect.x}px)`;
   }
 
   function placePanel(rect) {
@@ -178,6 +252,9 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     const id = ++requestId;
     const view = frame.getBoundingClientRect();
     cropCanvas = cropTo(toImageRect(rect, view.width, view.height, bitmap.width, bitmap.height));
+    photo.width = cropCanvas.width;
+    photo.height = cropCanvas.height;
+    photo.getContext('2d').drawImage(cropCanvas, 0, 0);
 
     const factor = upscaleFactor(cropCanvas.height);
     const large = new OffscreenCanvas(cropCanvas.width * factor, cropCanvas.height * factor);
@@ -189,7 +266,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     textArea.value = '';
     translation.textContent = '';
     brief.textContent = '';
-    setStatus('Reading...');
+    setStatus('Developing the text...');
     placePanel(rect);
 
     let result;
@@ -208,7 +285,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       setStatus('');
       textArea.focus();
     } else {
-      setStatus('No text found. You can still copy the image.');
+      setStatus('No text found. You can still copy the image or get a brief.');
     }
   }
 
@@ -241,12 +318,14 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     } else {
       box.hidden = true;
       hint.hidden = false;
+      lit.style.clipPath = 'inset(100%)';
     }
   });
 
   frame.addEventListener('pointercancel', () => {
     dragStart = null;
     box.hidden = true;
+    lit.style.clipPath = 'inset(100%)';
   });
 
   async function copyText(text) {

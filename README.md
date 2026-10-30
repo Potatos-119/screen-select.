@@ -44,6 +44,10 @@ The key is stored only in this browser profile. Anyone with access to that profi
 - Videos embedded from another site may keep playing while you select.
 - Translate sends the panel text to Google, and Brief sends your selection to Anthropic, only when you press them. Everything else stays on your computer.
 
+## Fonts
+
+The handwriting uses Caveat and Aref Ruqaa, both under the SIL Open Font License.
+
 ## Development
 
 ```bash

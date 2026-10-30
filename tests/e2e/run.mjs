@@ -247,6 +247,21 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 1000));
   });
 
+  await check('the handwriting fonts load under a strict content security policy', async () => {
+    await reset();
+    await activate();
+    await page.waitForFunction(
+      () => document.fonts.check('24px "Screen Select Hand"') && document.fonts.check('24px "Screen Select Hand Arabic"'),
+      { timeout: 5000 },
+    );
+    const faces = await page.evaluate(() => [...document.fonts].map((face) => face.family));
+    assert.ok(faces.some((name) => name.includes('Screen Select Hand')));
+    await page.keyboard.press('Escape');
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const left = await page.evaluate(() => [...document.fonts].filter((face) => face.family.includes('Screen Select')).length);
+    assert.equal(left, 0);
+  });
+
   await check('a tiny drag keeps the overlay open without a panel', async () => {
     await reset();
     await activate();
@@ -372,6 +387,7 @@ try {
     await options.click('#save-key');
     await new Promise((resolve) => setTimeout(resolve, 300));
     assert.equal(await options.$eval('#api-key', (input) => input.type), 'password');
+    if (process.env.OPTIONS_SHOT) await options.screenshot({ path: process.env.OPTIONS_SHOT });
     await options.close();
     await page.bringToFront();
 
@@ -391,6 +407,7 @@ try {
     const body = JSON.parse(call.init.body);
     assert.equal(body.messages[0].content[0].type, 'image');
     assert.match(body.messages[0].content[1].text, /Perception is the first step/);
+    if (process.env.BRIEF_SHOT) await page.screenshot({ path: process.env.BRIEF_SHOT });
   });
 
   await check('a wrong key shows a clear message', async () => {

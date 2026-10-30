@@ -15,4 +15,12 @@ for (const name of ['tesseract-core-lstm', 'tesseract-core-simd-lstm', 'tesserac
 }
 
 for (const [from, to] of files) cpSync(from, join(out, to));
-console.log(`Copied ${files.length} files to ${out}`);
+
+const fontsOut = 'extension/fonts';
+mkdirSync(fontsOut, { recursive: true });
+const fonts = [
+  ['node_modules/@fontsource/caveat/files/caveat-latin-500-normal.woff2', 'caveat.woff2'],
+  ['node_modules/@fontsource/aref-ruqaa/files/aref-ruqaa-arabic-400-normal.woff2', 'aref-ruqaa.woff2'],
+];
+for (const [from, to] of fonts) cpSync(from, join(fontsOut, to));
+console.log(`Copied ${files.length + fonts.length} files`);
