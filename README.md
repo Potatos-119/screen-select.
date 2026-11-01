@@ -80,11 +80,34 @@ You can change the shortcut at `chrome://extensions/shortcuts`. If `Alt+Shift+S`
 
 Extension options is also where you switch Ask between Claude and ChatGPT.
 
+## Desktop app for Mac
+
+There's also an early desktop version that works outside the browser, in any app. It does the same things as the extension, and it reads text with Apple Vision, which handles Arabic better. Tesseract takes over if Vision can't read something.
+
+It isn't signed by Apple, so right now you build it yourself on your own Mac. You'll need Node and Xcode's command line tools.
+
+```bash
+cd desktop
+npm install
+npm run dist
+```
+
+Then move `desktop/dist/mac-arm64/Screen Select.app` to Applications and open it.
+
+1. It lives in the menu bar at the top of the screen, not the Dock.
+2. Allow Screen Recording when it asks, then restart it.
+3. Open **Settings** from the menu bar icon and paste your keys. The desktop app can't see the keys saved in your browser.
+4. Press `Option+Shift+D` and drag a box. `Esc` cancels.
+
+The first time it opens, Vision can take about 40 seconds to load in the background. Tesseract reads for you until it's ready. If you rebuild the app, your Mac may ask for Screen Recording again.
+
+Keys are encrypted in your Mac's Keychain, and your settings and history stay on this computer. The box works on the screen your mouse is on.
+
 ## What it can't do
 
 - Netflix and other protected sites show up as a black picture, so there's nothing to read.
 - Browsers don't let extensions run on their own pages or the Chrome Web Store. The icon shows `!` there.
-- It only works inside the browser, not in other apps on your computer.
+- The extension only works inside the browser. For other apps, use the desktop app.
 - For a PDF saved on your computer, turn on **Allow access to file URLs** on the extension's Details page.
 - Blurry, tiny or fancy text can come out wrong, and Arabic more often than English.
 - Lines and arrows in diagrams get cleaned out of the text, but a stray mark can still get through.
@@ -110,3 +133,5 @@ npm run e2e
 ```
 
 `npm run e2e` drives Brave. To use another browser, set `BROWSER_PATH` to its executable.
+
+To test the desktop app, run `npm test` inside `desktop`. It uses a fake screen and fake AI services, and a window covers your screen for a moment.

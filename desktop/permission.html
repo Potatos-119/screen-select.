@@ -1,0 +1,23 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Screen Select</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; padding: 28px; font: 14px/1.5 -apple-system, 'Segoe UI', sans-serif; }
+  h1 { margin: 0 0 8px; font-size: 20px; }
+  ol { padding-left: 20px; }
+  button { margin: 8px 8px 0 0; padding: 6px 12px; font: inherit; cursor: pointer; }
+</style>
+<h1>Allow Screen Select to see your screen</h1>
+<p>It needs this to read the part of the screen you select. Nothing leaves your computer until you press a button.</p>
+<ol>
+  <li>Click <strong>Open System Settings</strong>.</li>
+  <li>Turn on <strong>Screen Select</strong> in the list.</li>
+  <li>Come back here and click <strong>Restart Screen Select</strong>.</li>
+</ol>
+<button id="open">Open System Settings</button>
+<button id="restart">Restart Screen Select</button>
+<script>
+  document.getElementById('open').addEventListener('click', () => desktop.openPrivacySettings());
+  document.getElementById('restart').addEventListener('click', () => desktop.restart());
+</script>

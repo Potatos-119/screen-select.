@@ -1,0 +1,17 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Screen Select</title>
+<style>
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+</style>
+<script src="extension/lib/crop.js"></script>
+<script src="extension/lib/looks.js"></script>
+<script src="extension/overlay.js"></script>
+<script>
+  // overlay.js removes its dialog when it closes, which is the cue to hide this window.
+  new MutationObserver(() => {
+    if (!document.querySelector('dialog')) desktop.overlayClosed();
+  }).observe(document.documentElement, { childList: true });
+
+  desktop.onStart((dataUrl) => globalThis.__screenSelectStart(dataUrl));
+</script>

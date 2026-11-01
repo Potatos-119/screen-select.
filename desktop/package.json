@@ -1,0 +1,49 @@
+{
+  "name": "screen-select-desktop",
+  "productName": "Screen Select",
+  "version": "0.1.0",
+  "description": "Select text from anything on screen, then copy, translate, search or ask AI.",
+  "author": "Screen Select",
+  "private": true,
+  "type": "module",
+  "main": "main.mjs",
+  "scripts": {
+    "prepare-app": "node prepare.mjs",
+    "start": "npm run prepare-app && electron .",
+    "dist": "npm run prepare-app && electron-builder --mac dir",
+    "test": "npm run prepare-app && electron ../tests/desktop/entry.mjs"
+  },
+  "devDependencies": {
+    "electron": "45.2.1",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "com.screenselect.desktop",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "*.mjs",
+      "preload.cjs",
+      "*.html",
+      "extension/**"
+    ],
+    "mac": {
+      "target": "dir",
+      "category": "public.app-category.productivity",
+      "icon": "bin/icon.png",
+      "identity": "-",
+      "extendInfo": {
+        "LSUIElement": true,
+        "NSScreenCaptureUsageDescription": "Screen Select reads the part of the screen you select."
+      },
+      "hardenedRuntime": false
+    },
+    "extraResources": [
+      {
+        "from": "bin",
+        "to": "bin"
+      }
+    ]
+  }
+}
