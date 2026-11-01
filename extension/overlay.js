@@ -5,6 +5,8 @@ globalThis.__screenSelectStart = async (dataUrl) => {
   let theme = normalizeLook(saved.theme);
   const BRIEF_IMAGE_MAX_EDGE = 1568;
   const BRIEF_IMAGE_QUALITY = 0.8;
+  const ASK_PLACEHOLDER = 'Ask about this selection (optional)';
+  const FOLLOW_UP_PLACEHOLDER = 'Ask a follow-up question';
 
   const STYLE = `
     :host {
@@ -119,7 +121,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     }
     .close:hover { background: #c42b1c; color: #ffffff; }
     .panel {
-      position: fixed; width: 510px; max-width: calc(100vw - 32px); max-height: calc(100vh - 16px);
+      position: fixed; width: 640px; max-width: calc(100vw - 32px); max-height: calc(100vh - 16px);
       overflow: auto; padding: 0 14px 14px; display: grid; gap: 10px;
       border-radius: var(--radius); background: var(--surface); color: var(--text);
       box-shadow: var(--panel-shadow); font: 14px/1.5 var(--ui-font); animation: var(--panel-in);
@@ -142,7 +144,10 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       white-space: pre-wrap; user-select: text;
     }
     .translation { background: var(--well); }
-    .brief { background: var(--slip); }
+    .brief { max-height: 40vh; background: var(--slip); }
+    .turn-question { margin: 0 0 4px; color: var(--muted); font-weight: 600; }
+    .turn-answer { margin: 0; }
+    .turn-answer + .turn-question { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
     .translation:empty, .brief:empty { display: none; }
     .question-form { margin: 0; }
     .question {
@@ -358,7 +363,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       <div class="actions choices" hidden></div>
       <form class="question-form">
         <input class="question" type="text" dir="auto" autocomplete="off" spellcheck="false"
-          placeholder="Ask about this selection (optional)" aria-label="Question for Brief" />
+          placeholder="${ASK_PLACEHOLDER}" aria-label="Question for Brief" />
       </form>
       <div class="actions">
         <button data-action="copy">Copy</button>
@@ -367,6 +372,8 @@ globalThis.__screenSelectStart = async (dataUrl) => {
         <button data-action="brief">Brief</button>
         <button data-action="search">Search</button>
         <button data-action="ask">Ask</button>
+        <button data-action="read">Read</button>
+        <button data-action="history">History</button>
         <button data-action="look">Look</button>
       </div>
       <div class="status" role="status"></div>
@@ -462,6 +469,8 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     keyEvents.forEach((type) => window.removeEventListener(type, blockKey, true));
     window.removeEventListener('contextmenu', blockMenu, true);
     pausedVideos.forEach((video) => video.play().catch(() => {}));
+    speechSynthesis.cancel();
+    briefPort?.disconnect();
     dialog.remove();
     loadedFonts.forEach((face) => document.fonts.delete(face));
     delete globalThis.__screenSelect;
@@ -474,6 +483,9 @@ globalThis.__screenSelectStart = async (dataUrl) => {
   let dragRect = null;
   let panelAnchor = null;
   let requestId = 0;
+  let briefPort = null;
+  let turns = [];
+  let historyEntry = null;
 
   function setStatus(message) {
     status.textContent = message;
@@ -558,7 +570,10 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     translation.textContent = '';
     brief.textContent = '';
     choices.hidden = true;
+    resetConversation();
     questionInput.value = '';
+    historyEntry = null;
+    speechSynthesis.cancel();
     setStatus(theme === 'print' ? 'Developing the text...' : 'Reading the text...');
     placePanel(rect);
 
@@ -576,6 +591,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     } else if (result?.text) {
       textArea.value = result.text;
       setStatus('');
+      startHistoryEntry(result.text);
       fitTextBox();
       // Focus puts the cursor at the end, which would scroll long text out of view.
       textArea.setSelectionRange(0, 0);
@@ -683,9 +699,76 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     } else if (result?.translation) {
       translation.textContent = result.translation;
       setStatus(`Translated with ${result.engine}.`);
+      saveToHistory({ translation: result.translation });
     } else {
       setStatus('Translation failed here, so it opened in Google Translate.');
     }
+  }
+
+  function resetConversation() {
+    briefPort?.disconnect();
+    briefPort = null;
+    turns = [];
+    brief.textContent = '';
+    questionInput.placeholder = ASK_PLACEHOLDER;
+  }
+
+  function startHistoryEntry(text) {
+    historyEntry = { id: crypto.randomUUID(), time: Date.now(), text, title: document.title, url: location.href };
+    saveToHistory({});
+  }
+
+  function saveToHistory(changes) {
+    historyEntry ??= { id: crypto.randomUUID(), time: Date.now(), text: textArea.value, title: document.title, url: location.href };
+    Object.assign(historyEntry, changes);
+    chrome.runtime.sendMessage({ type: 'ss-history', entry: historyEntry }).catch(() => {});
+  }
+
+  function addTurnLine(className, text) {
+    const line = document.createElement('p');
+    line.className = className;
+    line.dir = 'auto';
+    line.textContent = text;
+    brief.append(line);
+    return line;
+  }
+
+  function streamBrief(request, onText) {
+    return new Promise((resolve) => {
+      const port = chrome.runtime.connect({ name: 'ss-brief' });
+      briefPort = port;
+      port.onMessage.addListener((message) => {
+        if (message.finished) {
+          port.disconnect();
+          resolve(message);
+        } else {
+          onText(message.text);
+        }
+      });
+      port.onDisconnect.addListener(() => resolve({ stopped: true }));
+      port.postMessage(request);
+    });
+  }
+
+  function speechVoice(lang) {
+    return speechSynthesis.getVoices().find((voice) => voice.lang.toLowerCase().startsWith(lang));
+  }
+
+  async function voicesReady() {
+    if (speechSynthesis.getVoices().length) return;
+    await new Promise((resolve) => {
+      speechSynthesis.addEventListener('voiceschanged', resolve, { once: true });
+      setTimeout(resolve, 800);
+    });
+  }
+
+  function textToRead() {
+    const lastAnswer = turns.at(-1)?.answer;
+    return lastAnswer || translation.textContent || textArea.value.trim();
+  }
+
+  function setReadLabel(label) {
+    root.querySelector('[data-action="read"]').textContent = label;
   }
 
   async function briefInChat(requestText) {
@@ -716,6 +799,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     async brief() {
       choices.hidden = true;
       const question = questionInput.value.trim();
+      if (!question) resetConversation();
       setStatus(question ? 'Answering...' : 'Writing a brief...');
       const size = fitWithin(cropCanvas.width, cropCanvas.height, BRIEF_IMAGE_MAX_EDGE);
       const image = new OffscreenCanvas(size.width, size.height);
@@ -723,28 +807,73 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       context.imageSmoothingQuality = 'high';
       context.drawImage(cropCanvas, 0, 0, size.width, size.height);
 
-      const result = await chrome.runtime.sendMessage({
-        type: 'ss-brief',
-        text: textArea.value.trim(),
-        question,
-        imageDataUrl: await toDataUrl(image, 'image/jpeg', BRIEF_IMAGE_QUALITY),
-      });
+      const questionLine = question ? addTurnLine('turn-question', question) : null;
+      const answerLine = addTurnLine('turn-answer', '');
+      const turn = { question, answer: '' };
+      const result = await streamBrief(
+        {
+          text: textArea.value.trim(),
+          question,
+          turns,
+          imageDataUrl: await toDataUrl(image, 'image/jpeg', BRIEF_IMAGE_QUALITY),
+        },
+        (text) => {
+          turn.answer += text;
+          answerLine.textContent = turn.answer;
+          brief.scrollTop = brief.scrollHeight;
+          setStatus('');
+        },
+      );
+      if (result.stopped) return;
+      if (!turn.answer) {
+        questionLine?.remove();
+        answerLine.remove();
+      }
+      if (turn.answer) {
+        turns.push(turn);
+        questionInput.value = '';
+        questionInput.placeholder = FOLLOW_UP_PLACEHOLDER;
+        saveToHistory({ turns });
+      }
       if (result?.noKey) {
         setStatus('');
         showChoices(`Brief uses ${result.provider}, but no ${result.provider} key is saved.`, [
           ['Add a key', () => chrome.runtime.sendMessage({ type: 'ss-settings' })],
           ['Use my chat instead', () => briefInChat(result.requestText)],
         ]);
-      } else if (result?.brief) {
-        brief.textContent = result.brief;
-        setStatus(result.note ?? '');
+      } else if (result.error) {
+        setStatus(result.error);
       } else {
-        setStatus(result?.error ?? 'Could not get a brief. Try again.');
+        setStatus(result.note ?? '');
       }
     },
 
     async look() {
       openPicker();
+    },
+
+    async history() {
+      await chrome.runtime.sendMessage({ type: 'ss-open-history' });
+    },
+
+    async read() {
+      if (speechSynthesis.speaking) {
+        speechSynthesis.cancel();
+        return;
+      }
+      const text = textToRead();
+      if (!text) return setStatus('There is nothing to read aloud.');
+      await voicesReady();
+      const lang = /\p{Script=Arabic}/u.test(text) ? 'ar' : 'en';
+      const voice = speechVoice(lang);
+      if (lang === 'ar' && !voice) return setStatus('No Arabic voice is installed on this computer.');
+      const speech = new SpeechSynthesisUtterance(text);
+      speech.lang = voice?.lang ?? 'en-US';
+      if (voice) speech.voice = voice;
+      speech.onstart = () => setReadLabel('Stop');
+      speech.onend = () => setReadLabel('Read');
+      speech.onerror = () => setReadLabel('Read');
+      speechSynthesis.speak(speech);
     },
 
     async search() {

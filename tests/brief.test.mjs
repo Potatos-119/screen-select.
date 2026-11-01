@@ -10,6 +10,7 @@ import {
   buildTranslationRequest,
   FREE_MODELS,
   backupFor,
+  streamText,
   parseBriefResponse,
   describeBriefError,
   briefRequestText,
@@ -143,6 +144,43 @@ test('Gemini replies and errors are read properly', () => {
 test('the extension may reach Gemini', () => {
   const manifest = JSON.parse(readFileSync('extension/manifest.json'));
   assert.ok(manifest.host_permissions.includes('https://generativelanguage.googleapis.com/*'));
+});
+
+test('Brief asks for a streamed answer, and Translate does not', () => {
+  assert.equal(JSON.parse(request({ model: 'nvidia' }).init.body).stream, true);
+  assert.equal(JSON.parse(request({ model: 'opus' }).init.body).stream, true);
+  const translation = buildTranslationRequest({ apiKey: 'k', model: 'nvidia', text: 'x', target: 'ar' });
+  assert.equal(JSON.parse(translation.init.body).stream, false);
+});
+
+test('a follow-up keeps the whole conversation in order', () => {
+  const turns = [{ question: '', answer: 'First answer.' }, { question: 'why?', answer: 'Second answer.' }];
+  const { messages } = JSON.parse(request({ model: 'nvidia', turns, question: 'and then?' }).init.body);
+  assert.deepEqual(messages.slice(2), [
+    { role: 'assistant', content: 'First answer.' },
+    { role: 'user', content: 'why?' },
+    { role: 'assistant', content: 'Second answer.' },
+    { role: 'user', content: 'and then?' },
+  ]);
+  assert.equal(messages[1].content[1].type, 'image_url');
+  const claude = JSON.parse(request({ turns, question: 'and then?' }).init.body).messages;
+  assert.equal(claude[0].content[0].type, 'image');
+  assert.equal(claude.at(-1).content, 'and then?');
+});
+
+test('reads the text from each kind of stream', () => {
+  assert.equal(streamText({ choices: [{ delta: { content: 'Hi' } }] }, 'nvidia'), 'Hi');
+  assert.equal(streamText({ choices: [{ delta: { reasoning_content: 'hmm' } }] }, 'gemini'), '');
+  assert.equal(streamText({ type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hi' } }, 'opus'), 'Hi');
+  assert.equal(streamText({ type: 'message_start' }, 'opus'), '');
+  assert.throws(() => streamText({ delta: { stop_reason: 'refusal' } }, 'opus'), /declined/);
+  assert.throws(() => streamText({ type: 'error', error: { message: 'Overloaded' } }, 'opus'), /Overloaded/);
+});
+
+test('glossary words reach the translation prompt', () => {
+  const glossary = [{ source: 'Full-Stack', result: 'تطوير شامل' }];
+  const body = JSON.parse(buildTranslationRequest({ apiKey: 'k', model: 'nvidia', text: 'x', target: 'ar', glossary }).init.body);
+  assert.match(body.messages[0].content, /Full-Stack is تطوير شامل/);
 });
 
 test('reads only the text blocks of a reply', () => {

@@ -39,7 +39,7 @@
       html { min-height: 100%; background: var(--page); }
       body { margin: 0; padding: 48px 16px; color: var(--text); font: 15px/1.5 system-ui, -apple-system, sans-serif; }
       main {
-        max-width: 560px; margin: 0 auto; padding: 22px 28px 26px; background: var(--sheet);
+        max-width: 640px; margin: 0 auto; padding: 22px 28px 26px; background: var(--sheet);
         border-radius: var(--radius); box-shadow: var(--shadow);
         backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
       }
@@ -48,8 +48,8 @@
       legend { float: left; width: 100%; margin-bottom: 8px; padding: 0; font-weight: 600; }
       label { display: block; padding: 3px 0; }
       input[type='radio'] { accent-color: var(--text); }
-      input[type='password'] {
-        width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--control);
+      input[type='password'], input[type='search'], textarea {
+        display: block; width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--control);
         background: var(--field); color: var(--text); font: inherit;
       }
       button {
@@ -57,8 +57,25 @@
         color: var(--on-accent); font: 600 14px/1.3 system-ui, -apple-system, sans-serif; cursor: pointer;
       }
       :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+      textarea { min-height: 96px; resize: vertical; line-height: 1.5; }
+      button.quiet {
+        margin-top: 0; padding: 4px 10px; border: 1px solid var(--line); background: transparent; color: var(--text);
+        font-weight: 500; white-space: nowrap;
+      }
+      .history-tools { clear: both; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+      .history-tools label { padding: 0; }
+      .history-entry { padding: 12px 0; border-top: 1px solid var(--line); }
+      .history-meta { display: flex; align-items: baseline; gap: 10px; color: var(--muted); font-size: 13px; }
+      .history-meta a { overflow: hidden; color: inherit; text-overflow: ellipsis; white-space: nowrap; }
+      .history-meta button { margin-left: auto; flex: none; }
+      .history-text { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
+      .history-more { margin-top: 6px; font-size: 14px; }
+      .history-more summary { color: var(--muted); cursor: pointer; }
+      .history-more p { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+      .history-more .asked { font-weight: 600; }
+      #history-empty:empty { display: none; }
       small { display: block; margin-top: 8px; color: var(--muted); font-size: 13px; }
-      #key-status:empty, #nvidia-key-status:empty, #gemini-key-status:empty { display: none; }
+      #key-status:empty, #nvidia-key-status:empty, #gemini-key-status:empty, #glossary-status:empty { display: none; }
       .looks { clear: both; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
       .looks label { padding: 6px; border: 1px solid var(--line); border-radius: var(--control); cursor: pointer; }
       .looks label:has(input:checked) { border-color: var(--text); box-shadow: inset 0 0 0 1px var(--text); }
@@ -117,8 +134,26 @@
       <label><input type="radio" name="askTarget" value="claude" /> Claude</label>
       <label><input type="radio" name="askTarget" value="chatgpt" /> ChatGPT</label>
     </fieldset>
+    <fieldset>
+      <legend>Your glossary</legend>
+      <textarea id="glossary" dir="auto" spellcheck="false" aria-label="Your glossary" placeholder="Full-Stack = فول ستاك"></textarea>
+      <button id="save-glossary">Save glossary</button>
+      <small id="glossary-status" role="status"></small>
+      <small>Write one word or phrase per line with = between the two languages. Translate always uses your words, in both directions.</small>
+    </fieldset>
+    <fieldset id="history">
+      <legend>History</legend>
+      <div class="history-tools">
+        <label><input type="checkbox" id="keep-history" /> Save my selections and answers</label>
+        <button class="quiet" id="clear-history">Clear all</button>
+      </div>
+      <input id="history-search" type="search" aria-label="Search history" placeholder="Search your history" />
+      <small>Saved only in this browser, up to the last 100. Pictures are not saved.</small>
+      <p id="history-empty"></p>
+      <div id="history-list"></div>
+    </fieldset>
     </main>
     <script src="lib/looks.js"></script>
-    <script src="options.js"></script>
+    <script type="module" src="options.js"></script>
   </body>
 </html>

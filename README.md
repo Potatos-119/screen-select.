@@ -24,7 +24,9 @@ To update, download it again, replace the folder, and press the reload icon on S
 
 1. Press `Alt+Shift+S` (Option+Shift+S on a Mac) or click the icon.
 2. Drag a box over what you want. `Esc` cancels.
-3. Pick something in the panel: Copy, Copy image, Translate, Brief, Search or Ask.
+3. Pick something in the panel: Copy, Copy image, Translate, Brief, Search, Ask, Read or History.
+
+It works on web pages, videos and PDFs open in the browser. Read speaks the answer, the translation or the text, and pressing it again stops it. Arabic needs an Arabic voice installed on your computer.
 
 Search opens your text in Google's AI Mode, so you get an answer and not just a list of links.
 
@@ -34,9 +36,11 @@ Translate uses your free NVIDIA or Gemini key if you've saved one, because AI un
 
 It works out the direction by itself. Arabic goes to English and everything else goes to Arabic. If you grab Arabic and English together by mistake, it asks which one you want.
 
+Got a word you always want translated your way? Add it to your glossary in Extension options, one per line, like `Full-Stack = فول ستاك`. It works in both directions.
+
 ## Brief
 
-Brief explains what you selected in a few sentences, right there in the panel. Want something specific? Type a question in the box above the buttons and press Enter or Brief, and it answers that about your selection. It needs an API key, and you pick the service under Details, then Extension options.
+Brief explains what you selected in a few sentences, right there in the panel. The words appear as they're written. Want something specific? Type a question in the box above the buttons and press Enter or Brief. You can keep asking follow-up questions, and it remembers the conversation until you select something new. Press Brief with an empty box to start over. It needs an API key, and you pick the service under Details, then Extension options.
 
 | Option | Cost |
 |---|---|
@@ -58,6 +62,10 @@ Don't have a key? Brief will ask, and you can add one or copy a request and open
 
 Your keys stay in this browser profile, which also means anyone who can open that profile can read them.
 
+## History
+
+The History button opens your past selections, translations and answers, with a search box. They stay in this browser, it keeps the last 100, and it doesn't save pictures. It's on by default, and you can turn it off, delete one or clear everything in Extension options.
+
 ## Looks
 
 The first time you use it, a small window asks you to pick a look. You can change your mind later with the **Look** button in the panel or in the settings.
@@ -76,6 +84,8 @@ Extension options is also where you switch Ask between Claude and ChatGPT.
 
 - Netflix and other protected sites show up as a black picture, so there's nothing to read.
 - Browsers don't let extensions run on their own pages or the Chrome Web Store. The icon shows `!` there.
+- It only works inside the browser, not in other apps on your computer.
+- For a PDF saved on your computer, turn on **Allow access to file URLs** on the extension's Details page.
 - Blurry, tiny or fancy text can come out wrong, and Arabic more often than English.
 - Lines and arrows in diagrams get cleaned out of the text, but a stray mark can still get through.
 - Capital I and small l look the same in a lot of fonts. It fixes "Al" to "AI" most of the time, but a title like "Al Revolution" can slip through.

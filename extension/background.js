@@ -9,10 +9,14 @@ import {
   describeBriefTimeout,
   keyNameFor,
   parseBriefResponse,
+  streamText,
   providerFor,
   FREE_MODELS,
 } from './lib/brief.js';
+import { applyGlossary, matchGlossary, parseGlossary } from './lib/glossary.js';
+import { saveEntry } from './lib/history.js';
 import { aiSearchUrl } from './lib/search.js';
+import { createSseReader } from './lib/stream.js';
 import {
   buildTranslateUrl,
   fallbackUrl,
@@ -53,11 +57,11 @@ async function recognize(dataUrl) {
   return chrome.runtime.sendMessage({ target: 'offscreen', type: 'recognize', dataUrl });
 }
 
-async function translateWith(model, text, target) {
+async function translateWith(model, text, target, glossary) {
   const apiKey = await readKey(model);
   if (!apiKey) return null;
   try {
-    const { url, init } = buildTranslationRequest({ apiKey, model, text, target });
+    const { url, init } = buildTranslationRequest({ apiKey, model, text, target, glossary });
     const response = await fetch(url, { ...init, signal: AbortSignal.timeout(AI_TRANSLATE_TIMEOUT_MS) });
     if (!response.ok) return null;
     return parseBriefResponse(await response.json(), model);
@@ -66,9 +70,9 @@ async function translateWith(model, text, target) {
   }
 }
 
-async function translateWithAi(text, target) {
+async function translateWithAi(text, target, glossary) {
   for (const model of FREE_MODELS) {
-    const translation = await translateWith(model, text, target);
+    const translation = await translateWith(model, text, target, glossary);
     if (translation) return translation;
   }
   return null;
@@ -77,11 +81,14 @@ async function translateWithAi(text, target) {
 async function translate(text, chosenTarget) {
   if (!chosenTarget && hasTwoLanguages(text)) return { twoLanguages: true };
   const target = chosenTarget ?? targetLang(text);
-  const source = chosenTarget ? sourceLang(target) : 'auto';
-  const aiTranslation = await translateWithAi(text, target);
+  const { glossary: savedGlossary } = await chrome.storage.local.get('glossary');
+  const glossary = matchGlossary(text, parseGlossary(savedGlossary), target);
+  // Google leaves the words swapped in below alone once it's told the source language.
+  const source = chosenTarget || glossary.length ? sourceLang(target) : 'auto';
+  const aiTranslation = await translateWithAi(text, target, glossary);
   if (aiTranslation) return { translation: aiTranslation, engine: 'AI' };
   try {
-    const response = await fetch(buildTranslateUrl(text, target, source));
+    const response = await fetch(buildTranslateUrl(applyGlossary(text, glossary), target, source));
     if (!response.ok) throw new Error(`Translate returned ${response.status}`);
     return { translation: parseTranslateResponse(await response.json()), engine: 'Google' };
   } catch {
@@ -90,43 +97,94 @@ async function translate(text, chosenTarget) {
   }
 }
 
-async function askModel(model, apiKey, request, timeout) {
-  const { url, init } = buildBriefRequest({ ...request, apiKey, model });
-  let response;
-  try {
-    response = await fetch(url, { ...init, signal: AbortSignal.timeout(timeout) });
-  } catch (error) {
-    if (error?.name === 'TimeoutError') return { error: describeBriefTimeout(model) };
-    return { error: 'Could not reach the AI service. Check your connection and try again.' };
-  }
-  const json = await response.json().catch(() => null);
-  if (!response.ok) return { error: describeBriefError(response.status, json, model) };
-  return { brief: parseBriefResponse(json, model) };
-}
-
 async function readKey(model) {
   const keyName = keyNameFor(model);
   const { [keyName]: apiKey } = await chrome.storage.local.get(keyName);
   return apiKey;
 }
 
-async function brief(text, imageDataUrl, question) {
+// The time limit restarts with each piece of text, so a long answer can finish.
+async function streamModel({ model, apiKey, request, timeout, onText, stop }) {
+  const timer = new AbortController();
+  let timeoutId;
+  const restartTimer = () => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => timer.abort(new DOMException('Timed out', 'TimeoutError')), timeout);
+  };
+  let wrote = false;
+  const write = (text) => {
+    if (!text) return;
+    wrote = true;
+    restartTimer();
+    onText(text);
+  };
+
+  try {
+    restartTimer();
+    const { url, init } = buildBriefRequest({ ...request, apiKey, model });
+    const response = await fetch(url, { ...init, signal: AbortSignal.any([timer.signal, stop]) });
+    if (!response.ok) {
+      const json = await response.json().catch(() => null);
+      return { error: describeBriefError(response.status, json, model) };
+    }
+
+    const feed = createSseReader((event) => write(streamText(event, model)));
+    const decoder = new TextDecoder();
+    const reader = response.body.getReader();
+    let raw = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      raw += chunk;
+      feed(chunk);
+    }
+    // Some servers ignore streaming and send the whole reply at once.
+    if (!wrote) write(parseBriefResponse(JSON.parse(raw), model));
+    return {};
+  } catch (error) {
+    if (wrote) return { error: 'The answer stopped early. Ask again to continue.', partial: true };
+    if (error?.name === 'TimeoutError') return { error: describeBriefTimeout(model) };
+    if (error instanceof TypeError || error instanceof SyntaxError) {
+      return { error: 'Could not reach the AI service. Check your connection and try again.' };
+    }
+    return { error: error?.message ?? 'Could not get an answer. Try again.' };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function brief({ text, question, turns, imageDataUrl }, onText, stop) {
   const { briefModel } = await chrome.storage.sync.get('briefModel');
   const apiKey = await readKey(briefModel);
   if (!apiKey) {
     return { noKey: true, provider: providerFor(briefModel), requestText: text ? briefRequestText(text, question) : '' };
   }
 
-  const request = { text, question, imageDataUrl };
+  const request = { text, question, turns, imageDataUrl };
+  const shared = { request, onText, stop };
   const backup = backupFor(briefModel);
   const backupKey = backup && (await readKey(backup));
-  if (!backupKey) return askModel(briefModel, apiKey, request, BRIEF_TIMEOUT_MS);
+  if (!backupKey) return streamModel({ ...shared, model: briefModel, apiKey, timeout: BRIEF_TIMEOUT_MS });
 
-  const first = await askModel(briefModel, apiKey, request, BRIEF_ATTEMPT_MS).catch((error) => ({ error: error.message }));
-  if (first.brief) return first;
-  const second = await askModel(backup, backupKey, request, BRIEF_ATTEMPT_MS).catch(() => ({}));
-  if (!second.brief) return first;
-  return { ...second, note: `${providerFor(briefModel)} could not answer, so ${providerFor(backup)} did.` };
+  const first = await streamModel({ ...shared, model: briefModel, apiKey, timeout: BRIEF_ATTEMPT_MS });
+  if (!first.error || first.partial || stop.aborted) return first;
+  const second = await streamModel({ ...shared, model: backup, apiKey: backupKey, timeout: BRIEF_ATTEMPT_MS });
+  if (second.error) return first;
+  return { note: `${providerFor(briefModel)} could not answer, so ${providerFor(backup)} did.` };
+}
+
+let historyWrites = Promise.resolve();
+
+// Writes run one at a time so that two quick saves can't overwrite each other.
+function saveHistory(entry) {
+  historyWrites = historyWrites.then(async () => {
+    const { keepHistory } = await chrome.storage.sync.get({ keepHistory: true });
+    if (!keepHistory) return;
+    const { history = [] } = await chrome.storage.local.get('history');
+    await chrome.storage.local.set({ history: saveEntry(history, entry) });
+  });
+  return historyWrites;
 }
 
 // The page's content security policy can block font URLs, so the overlay gets the bytes.
@@ -204,7 +262,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const handlers = {
     'ss-recognize': () => recognize(message.dataUrl),
     'ss-translate': () => translate(message.text, message.target),
-    'ss-brief': () => brief(message.text, message.imageDataUrl, message.question),
+    'ss-history': () => saveHistory(message.entry),
+    'ss-open-history': () => chrome.tabs.create({ url: chrome.runtime.getURL('options.html#history') }),
     'ss-fonts': fonts,
     'ss-search': () => chrome.tabs.create({ url: aiSearchUrl(message.text) }),
     'ss-ask': ask,
@@ -215,6 +274,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   handler().then(sendResponse, (error) => sendResponse({ error: String(error?.message ?? error) }));
   return true;
+});
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== 'ss-brief') return;
+  const stop = new AbortController();
+  port.onDisconnect.addListener(() => stop.abort());
+  port.onMessage.addListener(async (message) => {
+    const onText = (text) => port.postMessage({ text });
+    const result = await brief(message, onText, stop.signal).catch((error) => ({ error: String(error?.message ?? error) }));
+    if (!stop.signal.aborted) port.postMessage({ finished: true, ...result });
+  });
 });
 
 globalThis.__recognize = recognize;

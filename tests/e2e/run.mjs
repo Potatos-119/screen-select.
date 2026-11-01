@@ -9,7 +9,12 @@ const BROWSER = process.env.BROWSER_PATH ?? '/Applications/Brave Browser.app/Con
 
 const SOURCE = process.env.EXT_DIR ?? 'extension';
 
-const server = createServer((_req, res) => {
+const server = createServer((req, res) => {
+  if (req.url === '/page.pdf') {
+    res.writeHead(200, { 'Content-Type': 'application/pdf' });
+    res.end(readFileSync('tests/fixtures/page.pdf'));
+    return;
+  }
   res.writeHead(200, {
     'Content-Type': 'text/html; charset=utf-8',
     'Content-Security-Policy': "default-src 'self' 'unsafe-inline'; media-src blob: mediastream:",
@@ -804,15 +809,152 @@ try {
     await page.keyboard.type('what does this mean?');
     await page.keyboard.press('Enter');
     await page.waitForFunction(
-      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.brief').textContent === 'It means this.',
+      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.brief').textContent.includes('It means this.'),
       { timeout: 5000 },
     );
     const call = await sw.evaluate(() => globalThis.__briefCalls[0]);
-    assert.match(JSON.parse(call.init.body).messages[1].content[0].text, /<question>\s*what does this mean\?/);
+    const { messages } = JSON.parse(call.init.body);
+    assert.equal(messages.at(-1).content, 'what does this mean?');
+    assert.equal(messages.at(-1).role, 'user');
+    assert.equal(messages.at(-2).role, 'assistant');
     assert.equal(await hostCount(), 1);
-    await inShadow((root) => {
-      root.querySelector('.question').value = '';
+    assert.equal(await inShadow((root) => root.querySelector('.question').value), '');
+    assert.equal(await inShadow((root) => root.querySelector('.question').placeholder), 'Ask a follow-up question');
+  });
+
+  await check('a follow-up keeps the earlier answers on screen', async () => {
+    await stubBrief(200, { choices: [{ message: { content: 'Second answer.' } }] });
+    await inShadow((root) => root.querySelector('.question').focus());
+    await page.keyboard.type('why?');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(
+      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.brief').textContent.includes('Second answer.'),
+      { timeout: 5000 },
+    );
+    const text = await inShadow((root) => root.querySelector('.brief').textContent);
+    assert.match(text, /It means this\.[\s\S]*why\?[\s\S]*Second answer\./);
+    const { messages } = JSON.parse((await sw.evaluate(() => globalThis.__briefCalls[0])).init.body);
+    assert.ok(messages.some((message) => message.role === 'assistant' && message.content === 'It means this.'));
+    if (process.env.CHAT_SHOT) await page.screenshot({ path: process.env.CHAT_SHOT });
+  });
+
+  await check('Brief with an empty box starts the conversation again', async () => {
+    await stubBrief(200, { choices: [{ message: { content: 'Fresh brief.' } }] });
+    await clickButton('brief');
+    await page.waitForFunction(
+      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.brief').textContent === 'Fresh brief.',
+      { timeout: 5000 },
+    );
+  });
+
+  await check('a streamed answer appears piece by piece', async () => {
+    await sw.evaluate(() => {
+      globalThis.fetch = async () => {
+        const encoder = new TextEncoder();
+        const send = (text) => encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n`);
+        return new Response(
+          new ReadableStream({
+            async start(controller) {
+              controller.enqueue(send('First '));
+              await new Promise((resolve) => setTimeout(resolve, 900));
+              controller.enqueue(send('second.'));
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+              controller.close();
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'text/event-stream' } },
+        );
+      };
     });
+    await clickButton('brief');
+    const answer = () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.brief').textContent;
+    await page.waitForFunction(`(${answer})() === 'First '`, { timeout: 5000 });
+    await page.waitForFunction(`(${answer})() === 'First second.'`, { timeout: 5000 });
+  });
+
+  await check('selections and answers are saved, and settings can show, search and delete them', async () => {
+    await page.waitForFunction(() => true);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const { history } = await sw.evaluate(() => chrome.storage.local.get('history'));
+    assert.ok(history.length > 0);
+    assert.equal(history[0].turns.at(-1).answer, 'First second.');
+    assert.equal(history[0].url, PAGE_URL);
+    assert.equal('imageDataUrl' in history[0], false);
+    await clickButton('history');
+    const target = await waitForTab(`chrome-extension://${new URL(sw.url()).host}/options.html#history`);
+    const options = await target.page();
+    await options.waitForSelector('.history-entry');
+    const before = await options.$$eval('.history-entry', (cards) => cards.length);
+    if (process.env.HISTORY_SHOT) await options.screenshot({ path: process.env.HISTORY_SHOT });
+    await options.type('#history-search', 'no such words');
+    await options.waitForFunction(() => document.querySelector('#history-empty').textContent.includes('Nothing matches'));
+    await options.$eval('#history-search', (box) => {
+      box.value = '';
+      box.dispatchEvent(new Event('input'));
+    });
+    await options.waitForSelector('.history-entry button');
+    await options.click('.history-entry button');
+    await options.waitForFunction((count) => document.querySelectorAll('.history-entry').length === count - 1, {}, before);
+    await options.click('#keep-history');
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal((await sw.evaluate(() => chrome.storage.sync.get('keepHistory'))).keepHistory, false);
+    const countBefore = (await sw.evaluate(() => chrome.storage.local.get('history'))).history.length;
+    await page.bringToFront();
+    await sw.evaluate(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    await clickButton('brief');
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    assert.equal((await sw.evaluate(() => chrome.storage.local.get('history'))).history.length, countBefore);
+    await sw.evaluate(() => chrome.storage.sync.remove('keepHistory'));
+    await options.close();
+    await page.bringToFront();
+  });
+
+  await check('your glossary goes to the AI translator', async () => {
+    const options = await browser.newPage();
+    await options.goto(`chrome-extension://${new URL(sw.url()).host}/options.html`);
+    await options.type('#glossary', 'Perception = الإدراك الخاص');
+    await options.click('#save-glossary');
+    await options.waitForFunction(() => document.querySelector('#glossary-status').textContent === 'Saved.');
+    await options.close();
+    await page.bringToFront();
+    await stubBrief(200, { choices: [{ message: { content: 'ترجمة' } }] });
+    await clickButton('translate');
+    await page.waitForFunction(
+      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.translation').textContent === 'ترجمة',
+      { timeout: 5000 },
+    );
+    const { messages } = JSON.parse((await sw.evaluate(() => globalThis.__briefCalls[0])).init.body);
+    assert.match(messages[0].content, /Perception is الإدراك الخاص/);
+  });
+
+  await check('your glossary also works with Google', async () => {
+    await sw.evaluate(() => {
+      globalThis.__sentToGoogle = '';
+      globalThis.fetch = async (url) => {
+        if (String(url).includes('nvidia') || String(url).includes('generativelanguage')) return new Response('{}', { status: 500 });
+        globalThis.__sentToGoogle = String(url);
+        return new Response(JSON.stringify([[['done', 'x']]]), { status: 200 });
+      };
+    });
+    await clickButton('translate');
+    await page.waitForFunction(
+      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.status').textContent.includes('with Google'),
+      { timeout: 5000 },
+    );
+    const sent = new URL(await sw.evaluate(() => globalThis.__sentToGoogle));
+    assert.match(sent.searchParams.get('q'), /الإدراك الخاص/);
+    assert.equal(sent.searchParams.get('sl'), 'en');
+    await sw.evaluate(() => chrome.storage.local.remove('glossary'));
+  });
+
+  await check('Read speaks the text, and pressing it again stops', async () => {
+    await clickButton('read');
+    await page.waitForFunction(() => speechSynthesis.speaking, { timeout: 5000 });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await clickButton('read');
+    await page.waitForFunction(() => !speechSynthesis.speaking, { timeout: 5000 });
   });
 
   await check('Translate uses AI when an NVIDIA key is saved', async () => {
@@ -956,6 +1098,25 @@ try {
       return chrome.action.getBadgeText({ tabId: tab.id });
     });
     assert.equal(badge, '!');
+  });
+
+  await check('reads text from a PDF in the browser', async () => {
+    await page.bringToFront();
+    await page.goto(`${PAGE_URL}page.pdf`);
+    // The viewer draws the page a moment after it loads, so an early capture can come back empty.
+    let text = '';
+    for (let attempt = 0; attempt < 5 && !text.includes('Reading a PDF page'); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await activate();
+      await page.waitForSelector('#screen-select-host', { timeout: 5000 });
+      await page.mouse.move(150, 40);
+      await page.mouse.down();
+      await page.mouse.move(1150, 420, { steps: 6 });
+      await page.mouse.up();
+      text = await panelText();
+      await page.keyboard.press('Escape');
+    }
+    assert.match(text, /Reading a PDF page/);
   });
 } finally {
   server.close();

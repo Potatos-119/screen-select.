@@ -1,3 +1,5 @@
+import { matchesSearch, safeLink } from './lib/history.js';
+
 const radios = document.querySelectorAll('input[name="askTarget"]');
 
 chrome.storage.sync.get({ askTarget: 'claude' }).then(({ askTarget }) => {
@@ -72,4 +74,94 @@ themeRadios.forEach((radio) => {
     document.documentElement.dataset.theme = radio.value;
     chrome.storage.sync.set({ theme: radio.value, lookChosen: true });
   });
+});
+
+const glossaryBox = document.getElementById('glossary');
+const glossaryStatus = document.getElementById('glossary-status');
+
+chrome.storage.local.get('glossary').then(({ glossary = '' }) => {
+  glossaryBox.value = glossary;
+});
+
+document.getElementById('save-glossary').addEventListener('click', async () => {
+  await chrome.storage.local.set({ glossary: glossaryBox.value });
+  glossaryStatus.textContent = 'Saved.';
+});
+
+const keepHistory = document.getElementById('keep-history');
+const historySearch = document.getElementById('history-search');
+const historyList = document.getElementById('history-list');
+const historyEmpty = document.getElementById('history-empty');
+
+chrome.storage.sync.get({ keepHistory: true }).then((saved) => {
+  keepHistory.checked = saved.keepHistory;
+});
+keepHistory.addEventListener('change', () => chrome.storage.sync.set({ keepHistory: keepHistory.checked }));
+
+function paragraph(text, className) {
+  const line = Object.assign(document.createElement('p'), { textContent: text, dir: 'auto' });
+  if (className) line.className = className;
+  return line;
+}
+
+function historyDetails(entry) {
+  const lines = entry.translation ? [paragraph(entry.translation)] : [];
+  for (const { question, answer } of entry.turns ?? []) {
+    if (question) lines.push(paragraph(question, 'asked'));
+    lines.push(paragraph(answer));
+  }
+  if (!lines.length) return null;
+  const details = Object.assign(document.createElement('details'), { className: 'history-more' });
+  const summary = Object.assign(document.createElement('summary'), { textContent: 'Translation and answers' });
+  details.append(summary, ...lines);
+  return details;
+}
+
+async function deleteEntry(id) {
+  const { history = [] } = await chrome.storage.local.get('history');
+  await chrome.storage.local.set({ history: history.filter((entry) => entry.id !== id) });
+}
+
+function historyCard(entry) {
+  const meta = Object.assign(document.createElement('div'), { className: 'history-meta' });
+  const time = Object.assign(document.createElement('time'), { textContent: new Date(entry.time).toLocaleString() });
+  meta.append(time);
+  const link = safeLink(entry.url);
+  if (link) {
+    const page = Object.assign(document.createElement('a'), {
+      href: link,
+      textContent: entry.title || link,
+      target: '_blank',
+      rel: 'noreferrer',
+    });
+    meta.append(page);
+  }
+  const remove = Object.assign(document.createElement('button'), { className: 'quiet', textContent: 'Delete' });
+  remove.addEventListener('click', () => deleteEntry(entry.id));
+  meta.append(remove);
+
+  const card = Object.assign(document.createElement('article'), { className: 'history-entry' });
+  card.append(meta, paragraph(entry.text, 'history-text'));
+  const details = historyDetails(entry);
+  if (details) card.append(details);
+  return card;
+}
+
+async function showHistory() {
+  const { history = [] } = await chrome.storage.local.get('history');
+  const found = history.filter((entry) => matchesSearch(entry, historySearch.value));
+  historyList.replaceChildren(...found.map(historyCard));
+  if (found.length) historyEmpty.textContent = '';
+  else historyEmpty.textContent = history.length ? 'Nothing matches your search.' : 'Your selections will show up here.';
+}
+
+historySearch.addEventListener('input', showHistory);
+document.getElementById('clear-history').addEventListener('click', async () => {
+  if (confirm('Delete your whole history?')) await chrome.storage.local.remove('history');
+});
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.history) showHistory();
+});
+showHistory().then(() => {
+  if (location.hash === '#history') document.getElementById('history').scrollIntoView();
 });
