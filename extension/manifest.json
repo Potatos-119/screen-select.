@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Screen Select",
-  "version": "1.15.0",
+  "version": "1.15.1",
   "description": "Select text from anything on screen, even videos, then copy, translate, search or ask AI.",
   "permissions": ["activeTab", "scripting", "offscreen", "clipboardWrite", "storage"],
   "host_permissions": [

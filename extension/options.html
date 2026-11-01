@@ -44,7 +44,7 @@
         backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
       }
       h1 { margin: 0 0 14px; font: var(--heading); }
-      fieldset { margin: 0; padding: 16px 0; border: 0; border-top: 1px var(--dash) var(--line); }
+      fieldset { min-width: 0; margin: 0; padding: 16px 0; border: 0; border-top: 1px var(--dash) var(--line); }
       legend { float: left; width: 100%; margin-bottom: 8px; padding: 0; font-weight: 600; }
       label { display: block; padding: 3px 0; }
       input[type='radio'] { accent-color: var(--text); }
@@ -66,7 +66,8 @@
       .history-tools label { padding: 0; }
       .history-entry { padding: 12px 0; border-top: 1px solid var(--line); }
       .history-meta { display: flex; align-items: baseline; gap: 10px; color: var(--muted); font-size: 13px; }
-      .history-meta a { overflow: hidden; color: inherit; text-overflow: ellipsis; white-space: nowrap; }
+      .history-meta time { flex: none; }
+      .history-meta a { min-width: 0; overflow: hidden; color: inherit; text-overflow: ellipsis; white-space: nowrap; }
       .history-meta button { margin-left: auto; flex: none; }
       .history-text { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
       .history-more { margin-top: 6px; font-size: 14px; }
