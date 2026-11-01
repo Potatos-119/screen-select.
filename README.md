@@ -30,7 +30,9 @@ Search opens your text in Google's AI Mode, so you get an answer and not just a 
 
 The text in the panel is real text. If it misread a word you can just fix it, and you can select part of it and right-click like anywhere else.
 
-Translate works out the direction by itself. Arabic goes to English and everything else goes to Arabic. If you grab Arabic and English together by mistake, it asks which one you want.
+Translate uses your free NVIDIA key if you've saved one, because AI understands context and technical terms better. Without a key, or if that fails, it uses Google, and the panel tells you which one answered.
+
+It works out the direction by itself. Arabic goes to English and everything else goes to Arabic. If you grab Arabic and English together by mistake, it asks which one you want.
 
 ## Brief
 
@@ -79,7 +81,7 @@ Extension options is also where you switch Ask between Claude and ChatGPT.
 
 ## Privacy
 
-Translate and Search send the panel text to Google. Brief sends your selection, picture included, to the service you picked. All of that happens only when you press the button, and everything else stays on your computer.
+Search sends the panel text to Google. Translate sends it to NVIDIA if you've saved a key, and to Google if you haven't. Brief sends your selection, picture included, to the service you picked. All of that happens only when you press the button, and everything else stays on your computer.
 
 ## Fonts
 

@@ -7,6 +7,8 @@ import {
   providerFor,
   describeBriefTimeout,
   buildBriefRequest,
+  buildTranslationRequest,
+  TRANSLATION_KEY,
   parseBriefResponse,
   describeBriefError,
   briefRequestText,
@@ -90,6 +92,24 @@ test('no question means no question tag', () => {
 
 test('the chat request carries the question', () => {
   assert.match(briefRequestText('an agent', 'why?'), /^why\?[\s\S]*an agent/);
+});
+
+test('AI translation uses the free NVIDIA key and sends no picture', () => {
+  assert.equal(TRANSLATION_KEY, 'nvidiaKey');
+  const { url, init } = buildTranslationRequest({ apiKey: 'test-key', text: 'java Full-Stack', target: 'ar' });
+  const { messages, chat_template_kwargs: options } = JSON.parse(init.body);
+  assert.equal(url, 'https://integrate.api.nvidia.com/v1/chat/completions');
+  assert.equal(init.headers.authorization, 'Bearer test-key');
+  assert.equal(options.enable_thinking, false);
+  assert.equal(messages[1].content, '<text>\njava Full-Stack\n</text>');
+});
+
+test('the translation prompt names the language and guards against word-by-word terms', () => {
+  const prompt = (target) => JSON.parse(buildTranslationRequest({ apiKey: 'k', text: 'x', target }).init.body).messages[0].content;
+  assert.match(prompt('ar'), /into Arabic/);
+  assert.match(prompt('en'), /into English/);
+  assert.match(prompt('ar'), /فول ستاك/);
+  assert.match(prompt('ar'), /not instructions/);
 });
 
 test('reads only the text blocks of a reply', () => {

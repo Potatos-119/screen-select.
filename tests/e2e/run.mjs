@@ -815,6 +815,32 @@ try {
     });
   });
 
+  await check('Translate uses AI when an NVIDIA key is saved', async () => {
+    await stubBrief(200, { choices: [{ message: { content: 'جافا فول ستاك' } }] });
+    await clickButton('translate');
+    await page.waitForFunction(
+      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.status').textContent.includes('with AI'),
+      { timeout: 5000 },
+    );
+    assert.equal(await inShadow((root) => root.querySelector('.translation').textContent), 'جافا فول ستاك');
+    const calls = await sw.evaluate(() => globalThis.__briefCalls);
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].url, /nvidia/);
+  });
+
+  await check('Translate falls back to Google when AI fails', async () => {
+    await sw.evaluate(() => {
+      const real = globalThis.__realFetch;
+      globalThis.fetch = (url, init) =>
+        String(url).includes('nvidia') ? Promise.resolve(new Response('{}', { status: 500 })) : real(url, init);
+    });
+    await clickButton('translate');
+    await page.waitForFunction(
+      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.status').textContent.includes('with Google'),
+      { timeout: 15000 },
+    );
+  });
+
   await check('Brief stops waiting and explains a server that never answers', async () => {
     await sw.evaluate(() => {
       globalThis.fetch = (_url, init) =>

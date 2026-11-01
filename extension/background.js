@@ -2,11 +2,13 @@ import {
   BRIEF_TIMEOUT_MS,
   briefRequestText,
   buildBriefRequest,
+  buildTranslationRequest,
   describeBriefError,
   describeBriefTimeout,
   keyNameFor,
   parseBriefResponse,
   providerFor,
+  TRANSLATION_KEY,
 } from './lib/brief.js';
 import { aiSearchUrl } from './lib/search.js';
 import {
@@ -24,6 +26,7 @@ const ASK_URLS = {
 };
 
 const CAPTURE_RETRY_MS = 600;
+const AI_TRANSLATE_TIMEOUT_MS = 12000;
 
 const startingTabs = new Set();
 let offscreenReady = null;
@@ -48,14 +51,29 @@ async function recognize(dataUrl) {
   return chrome.runtime.sendMessage({ target: 'offscreen', type: 'recognize', dataUrl });
 }
 
+async function translateWithAi(text, target) {
+  const { [TRANSLATION_KEY]: apiKey } = await chrome.storage.local.get(TRANSLATION_KEY);
+  if (!apiKey) return null;
+  try {
+    const { url, init } = buildTranslationRequest({ apiKey, text, target });
+    const response = await fetch(url, { ...init, signal: AbortSignal.timeout(AI_TRANSLATE_TIMEOUT_MS) });
+    if (!response.ok) return null;
+    return parseBriefResponse(await response.json());
+  } catch {
+    return null;
+  }
+}
+
 async function translate(text, chosenTarget) {
   if (!chosenTarget && hasTwoLanguages(text)) return { twoLanguages: true };
   const target = chosenTarget ?? targetLang(text);
   const source = chosenTarget ? sourceLang(target) : 'auto';
+  const aiTranslation = await translateWithAi(text, target);
+  if (aiTranslation) return { translation: aiTranslation, engine: 'AI' };
   try {
     const response = await fetch(buildTranslateUrl(text, target, source));
     if (!response.ok) throw new Error(`Translate returned ${response.status}`);
-    return { translation: parseTranslateResponse(await response.json()) };
+    return { translation: parseTranslateResponse(await response.json()), engine: 'Google' };
   } catch {
     await chrome.tabs.create({ url: fallbackUrl(text, target, source) });
     return { fallbackOpened: true };

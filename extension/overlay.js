@@ -682,7 +682,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       ]);
     } else if (result?.translation) {
       translation.textContent = result.translation;
-      setStatus('');
+      setStatus(`Translated with ${result.engine}.`);
     } else {
       setStatus('Translation failed here, so it opened in Google Translate.');
     }
