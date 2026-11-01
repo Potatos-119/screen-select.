@@ -35,6 +35,7 @@ function wireKey({ inputId, buttonId, statusId, storageKey }) {
 }
 
 wireKey({ inputId: 'nvidia-key', buttonId: 'save-nvidia-key', statusId: 'nvidia-key-status', storageKey: 'nvidiaKey' });
+wireKey({ inputId: 'gemini-key', buttonId: 'save-gemini-key', statusId: 'gemini-key-status', storageKey: 'geminiKey' });
 wireKey({ inputId: 'api-key', buttonId: 'save-key', statusId: 'key-status', storageKey: 'apiKey' });
 
 chrome.storage.sync.get({ briefModel: 'nvidia' }).then(({ briefModel }) => {

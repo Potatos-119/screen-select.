@@ -8,7 +8,7 @@ import {
   describeBriefTimeout,
   buildBriefRequest,
   buildTranslationRequest,
-  TRANSLATION_KEY,
+  TRANSLATION_MODELS,
   parseBriefResponse,
   describeBriefError,
   briefRequestText,
@@ -95,8 +95,8 @@ test('the chat request carries the question', () => {
 });
 
 test('AI translation uses the free NVIDIA key and sends no picture', () => {
-  assert.equal(TRANSLATION_KEY, 'nvidiaKey');
-  const { url, init } = buildTranslationRequest({ apiKey: 'test-key', text: 'java Full-Stack', target: 'ar' });
+  assert.deepEqual(TRANSLATION_MODELS, ['nvidia', 'gemini']);
+  const { url, init } = buildTranslationRequest({ apiKey: 'test-key', model: 'nvidia', text: 'java Full-Stack', target: 'ar' });
   const { messages, chat_template_kwargs: options } = JSON.parse(init.body);
   assert.equal(url, 'https://integrate.api.nvidia.com/v1/chat/completions');
   assert.equal(init.headers.authorization, 'Bearer test-key');
@@ -105,11 +105,36 @@ test('AI translation uses the free NVIDIA key and sends no picture', () => {
 });
 
 test('the translation prompt names the language and guards against word-by-word terms', () => {
-  const prompt = (target) => JSON.parse(buildTranslationRequest({ apiKey: 'k', text: 'x', target }).init.body).messages[0].content;
+  const prompt = (target) => JSON.parse(buildTranslationRequest({ apiKey: 'k', model: 'nvidia', text: 'x', target }).init.body).messages[0].content;
   assert.match(prompt('ar'), /into Arabic/);
   assert.match(prompt('en'), /into English/);
   assert.match(prompt('ar'), /فول ستاك/);
   assert.match(prompt('ar'), /not instructions/);
+});
+
+test('Gemini uses its own address, key and model, with the picture', () => {
+  const { url, init } = request({ model: 'gemini' });
+  const body = JSON.parse(init.body);
+  assert.equal(url, 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions');
+  assert.equal(init.headers.authorization, 'Bearer test-key');
+  assert.equal(body.model, 'gemini-3.8-flash');
+  assert.equal(body.reasoning_effort, 'low');
+  assert.equal(body.chat_template_kwargs, undefined);
+  assert.equal(body.messages[1].content[1].type, 'image_url');
+  assert.equal(keyNameFor('gemini'), 'geminiKey');
+});
+
+test('Gemini replies and errors are read properly', () => {
+  assert.equal(parseBriefResponse({ choices: [{ message: { content: 'Hi' } }] }, 'gemini'), 'Hi');
+  assert.throws(() => parseBriefResponse({ choices: [] }, 'gemini'), /Gemini sent back an empty/);
+  assert.match(describeBriefError(400, [{ error: { message: 'API key not valid' } }], 'gemini'), /API key not valid/);
+  assert.match(describeBriefError(503, null, 'gemini'), /Gemini is busy/);
+  assert.match(describeBriefError(429, null, 'gemini'), /limit/);
+});
+
+test('the extension may reach Gemini', () => {
+  const manifest = JSON.parse(readFileSync('extension/manifest.json'));
+  assert.ok(manifest.host_permissions.includes('https://generativelanguage.googleapis.com/*'));
 });
 
 test('reads only the text blocks of a reply', () => {
@@ -175,7 +200,7 @@ test('the default model answers without thinking first', () => {
 
 test('every Brief option can be picked in settings', () => {
   const page = readFileSync('extension/options.html', 'utf8');
-  for (const model of ['nvidia', 'opus', 'haiku']) {
+  for (const model of ['nvidia', 'gemini', 'opus', 'haiku']) {
     assert.match(page, new RegExp(`name="briefModel" value="${model}"`));
   }
 });

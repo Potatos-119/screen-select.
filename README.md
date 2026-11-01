@@ -30,7 +30,7 @@ Search opens your text in Google's AI Mode, so you get an answer and not just a 
 
 The text in the panel is real text. If it misread a word you can just fix it, and you can select part of it and right-click like anywhere else.
 
-Translate uses your free NVIDIA key if you've saved one, because AI understands context and technical terms better. Without a key, or if that fails, it uses Google, and the panel tells you which one answered.
+Translate uses your free NVIDIA or Gemini key if you've saved one, because AI understands context and technical terms better. Without a key, or if that fails, it uses Google, and the panel tells you which one answered.
 
 It works out the direction by itself. Arabic goes to English and everything else goes to Arabic. If you grab Arabic and English together by mistake, it asks which one you want.
 
@@ -41,6 +41,7 @@ Brief explains what you selected in a few sentences, right there in the panel. W
 | Option | Cost |
 |---|---|
 | NVIDIA Nemotron (default) | Free trial with limited credits |
+| Google Gemini | Free with a daily limit |
 | Claude Opus or Haiku | Paid per use, separate from a Claude chat plan |
 
 I tried a few of NVIDIA's free models and kept Nemotron because it's fast and it can see the picture.
@@ -51,9 +52,11 @@ To set up the free one:
 2. Open the extension's Details page, then Extension options.
 3. Paste the key under **Your NVIDIA API key** and click **Save NVIDIA key**.
 
+Gemini is a good backup for when NVIDIA is slow. Get a free key at [aistudio.google.com](https://aistudio.google.com), save it under **Your Gemini API key**, and pick Google Gemini under **Brief uses**. On the free plan Google may use what you send to improve its products, so don't select anything private.
+
 Don't have a key? Brief will ask, and you can add one or copy a request and open your chat instead. If a service takes more than 25 seconds, Brief gives up and tells you.
 
-Your key stays in this browser profile, which also means anyone who can open that profile can read it.
+Your keys stay in this browser profile, which also means anyone who can open that profile can read them.
 
 ## Looks
 
@@ -81,7 +84,7 @@ Extension options is also where you switch Ask between Claude and ChatGPT.
 
 ## Privacy
 
-Search sends the panel text to Google. Translate sends it to NVIDIA if you've saved a key, and to Google if you haven't. Brief sends your selection, picture included, to the service you picked. All of that happens only when you press the button, and everything else stays on your computer.
+Search sends the panel text to Google. Translate sends it to NVIDIA or Gemini if you've saved a key, and to Google Translate if you haven't. Brief sends your selection, picture included, to the service you picked. All of that happens only when you press the button, and everything else stays on your computer.
 
 ## Fonts
 

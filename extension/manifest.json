@@ -1,13 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Screen Select",
-  "version": "1.12.0",
+  "version": "1.13.0",
   "description": "Select text from anything on screen, even videos, then copy, translate, search or ask AI.",
   "permissions": ["activeTab", "scripting", "offscreen", "clipboardWrite", "storage"],
   "host_permissions": [
     "https://translate.googleapis.com/*",
     "https://api.anthropic.com/*",
-    "https://integrate.api.nvidia.com/*"
+    "https://integrate.api.nvidia.com/*", "https://generativelanguage.googleapis.com/*"
   ],
   "background": {
     "service_worker": "background.js",

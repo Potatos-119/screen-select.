@@ -8,7 +8,7 @@ import {
   keyNameFor,
   parseBriefResponse,
   providerFor,
-  TRANSLATION_KEY,
+  TRANSLATION_MODELS,
 } from './lib/brief.js';
 import { aiSearchUrl } from './lib/search.js';
 import {
@@ -51,17 +51,26 @@ async function recognize(dataUrl) {
   return chrome.runtime.sendMessage({ target: 'offscreen', type: 'recognize', dataUrl });
 }
 
-async function translateWithAi(text, target) {
-  const { [TRANSLATION_KEY]: apiKey } = await chrome.storage.local.get(TRANSLATION_KEY);
+async function translateWith(model, text, target) {
+  const keyName = keyNameFor(model);
+  const { [keyName]: apiKey } = await chrome.storage.local.get(keyName);
   if (!apiKey) return null;
   try {
-    const { url, init } = buildTranslationRequest({ apiKey, text, target });
+    const { url, init } = buildTranslationRequest({ apiKey, model, text, target });
     const response = await fetch(url, { ...init, signal: AbortSignal.timeout(AI_TRANSLATE_TIMEOUT_MS) });
     if (!response.ok) return null;
-    return parseBriefResponse(await response.json());
+    return parseBriefResponse(await response.json(), model);
   } catch {
     return null;
   }
+}
+
+async function translateWithAi(text, target) {
+  for (const model of TRANSLATION_MODELS) {
+    const translation = await translateWith(model, text, target);
+    if (translation) return translation;
+  }
+  return null;
 }
 
 async function translate(text, chosenTarget) {

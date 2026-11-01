@@ -2,6 +2,7 @@ const CLAUDE_URL = 'https://api.anthropic.com/v1/messages';
 const CLAUDE_VERSION = '2026-10-21';
 const CLAUDE_FALLBACK_BETA = 'server-side-fallback-2026-07-01';
 const NVIDIA_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 const MAX_TOKENS = 2000;
 // Stays under the 30 seconds a browser lets a service worker wait for a reply.
 export const BRIEF_TIMEOUT_MS = 25000;
@@ -12,8 +13,16 @@ const MODELS = {
   nvidia: {
     provider: 'NVIDIA',
     keyName: 'nvidiaKey',
+    url: NVIDIA_URL,
     id: 'nvidia/nemotron-3.5-super-vl-120b-a12b',
     options: { chat_template_kwargs: { enable_thinking: false } },
+  },
+  gemini: {
+    provider: 'Gemini',
+    keyName: 'geminiKey',
+    url: GEMINI_URL,
+    id: 'gemini-3.8-flash',
+    options: { reasoning_effort: 'low' },
   },
   opus: { provider: 'Claude', keyName: 'apiKey', id: 'claude-opus-5-5', fallbacks: true },
   haiku: { provider: 'Claude', keyName: 'apiKey', id: 'claude-haiku-5-5', fallbacks: false },
@@ -60,7 +69,7 @@ export function providerFor(model) {
   return modelFor(model).provider;
 }
 
-function nvidiaRequest(apiKey, model, messages) {
+function chatRequest(apiKey, model, messages) {
   const body = {
     model: modelFor(model).id,
     max_tokens: MAX_TOKENS,
@@ -69,7 +78,7 @@ function nvidiaRequest(apiKey, model, messages) {
     messages,
   };
   return {
-    url: NVIDIA_URL,
+    url: modelFor(model).url,
     init: {
       method: 'POST',
       headers: {
@@ -82,8 +91,8 @@ function nvidiaRequest(apiKey, model, messages) {
   };
 }
 
-function buildNvidiaRequest({ apiKey, model, text, question, imageDataUrl }) {
-  return nvidiaRequest(apiKey, model, [
+function buildChatRequest({ apiKey, model, text, question, imageDataUrl }) {
+  return chatRequest(apiKey, model, [
     { role: 'system', content: SYSTEM_PROMPT },
     {
       role: 'user',
@@ -95,11 +104,11 @@ function buildNvidiaRequest({ apiKey, model, text, question, imageDataUrl }) {
   ]);
 }
 
-// Free, so Translate can use it without spending anyone's paid credit.
-export const TRANSLATION_KEY = MODELS.nvidia.keyName;
+// Free options only, so Translate never spends anyone's paid credit.
+export const TRANSLATION_MODELS = ['nvidia', 'gemini'];
 
-export function buildTranslationRequest({ apiKey, text, target }) {
-  return nvidiaRequest(apiKey, DEFAULT_MODEL, [
+export function buildTranslationRequest({ apiKey, model, text, target }) {
+  return chatRequest(apiKey, model, [
     { role: 'system', content: translationPrompt(target) },
     { role: 'user', content: `<text>\n${text}\n</text>` },
   ]);
@@ -137,14 +146,14 @@ function buildClaudeRequest({ apiKey, model, text, question, imageDataUrl }) {
 }
 
 export function buildBriefRequest(request) {
-  return modelFor(request.model).provider === 'NVIDIA' ? buildNvidiaRequest(request) : buildClaudeRequest(request);
+  return modelFor(request.model).provider === 'Claude' ? buildClaudeRequest(request) : buildChatRequest(request);
 }
 
 export function parseBriefResponse(json, model) {
   const { provider } = modelFor(model);
-  if (provider === 'NVIDIA') {
+  if (provider !== 'Claude') {
     const text = json?.choices?.[0]?.message?.content?.trim();
-    if (!text) throw new Error('NVIDIA sent back an empty reply. Try again.');
+    if (!text) throw new Error(`${provider} sent back an empty reply. Try again.`);
     return text;
   }
   if (json?.stop_reason === 'refusal') {
@@ -172,6 +181,8 @@ export function describeBriefError(status, json, model) {
     return 'NVIDIA does not offer this model any more. Choose another option in the extension settings.';
   }
   if (status === 429) return 'You reached your API rate limit. Wait a moment and try again.';
-  if (status === 529) return `${provider} is busy right now. Try again in a moment.`;
-  return json?.error?.message ?? json?.detail ?? `${provider} returned an error (${status}).`;
+  if (status === 503 || status === 529) return `${provider} is busy right now. Try again in a moment.`;
+  // Gemini can wrap its error in a list.
+  const error = Array.isArray(json) ? json[0]?.error : json?.error;
+  return error?.message ?? json?.detail ?? `${provider} returned an error (${status}).`;
 }

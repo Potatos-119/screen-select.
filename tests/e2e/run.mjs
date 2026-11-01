@@ -33,7 +33,7 @@ const browser = await puppeteer.launch({
   userDataDir: join(workDir, 'profile'),
   defaultViewport: null,
   ignoreDefaultArgs: ['--disable-extensions'],
-  args: [`--disable-extensions-except=${extDir}`, `--load-extension=${extDir}`],
+  args: [`--disable-extensions-except=${extDir}`, `--load-extension=${extDir}`, '--window-size=1280,800'],
 });
 
 let failed = 0;
@@ -677,7 +677,7 @@ try {
       status,
       JSON.stringify(body),
     );
-  const clearKey = () => sw.evaluate(() => chrome.storage.local.remove(['apiKey', 'nvidiaKey']));
+  const clearKey = () => sw.evaluate(() => chrome.storage.local.remove(['apiKey', 'nvidiaKey', 'geminiKey']));
 
   await check('Brief without a key asks first and opens nothing', async () => {
     await clearKey();
@@ -839,6 +839,42 @@ try {
       () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.status').textContent.includes('with Google'),
       { timeout: 15000 },
     );
+  });
+
+  await check('a Gemini key saved in settings gives a brief in the panel', async () => {
+    const options = await browser.newPage();
+    await options.goto(`chrome-extension://${new URL(sw.url()).host}/options.html`);
+    await options.type('#gemini-key', 'test-gemini-key');
+    await options.click('#save-gemini-key');
+    await options.waitForFunction(() => document.querySelector('#gemini-key-status').textContent === 'Saved.');
+    await options.click('input[name="briefModel"][value="gemini"]');
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    await options.close();
+    await page.bringToFront();
+    await stubBrief(200, { choices: [{ message: { content: 'Gemini brief.' } }] });
+    await clickButton('brief');
+    await page.waitForFunction(
+      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.brief').textContent === 'Gemini brief.',
+      { timeout: 5000 },
+    );
+    const call = await sw.evaluate(() => globalThis.__briefCalls[0]);
+    assert.match(call.url, /generativelanguage/);
+    assert.equal(call.init.headers.authorization, 'Bearer test-gemini-key');
+    await sw.evaluate(() => chrome.storage.sync.remove('briefModel'));
+  });
+
+  await check('Translate uses Gemini when only a Gemini key is saved', async () => {
+    const { nvidiaKey } = await sw.evaluate(() => chrome.storage.local.get('nvidiaKey'));
+    await sw.evaluate(() => chrome.storage.local.remove('nvidiaKey'));
+    await stubBrief(200, { choices: [{ message: { content: 'ترجمة' } }] });
+    await clickButton('translate');
+    await page.waitForFunction(
+      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.translation').textContent === 'ترجمة',
+      { timeout: 5000 },
+    );
+    assert.match((await sw.evaluate(() => globalThis.__briefCalls[0])).url, /generativelanguage/);
+    await sw.evaluate((key) => chrome.storage.local.set({ nvidiaKey: key }), nvidiaKey);
+    await sw.evaluate(() => chrome.storage.local.remove('geminiKey'));
   });
 
   await check('Brief stops waiting and explains a server that never answers', async () => {
