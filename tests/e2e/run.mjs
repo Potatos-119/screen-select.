@@ -911,6 +911,31 @@ try {
     await page.bringToFront();
   });
 
+  await check('a long page title stays inside the history card', async () => {
+    await sw.evaluate(() =>
+      chrome.storage.local.set({
+        history: [{ id: 'long', time: Date.now(), text: 'Short text', title: 'A very long page title '.repeat(12), url: 'https://example.com/' }],
+      }),
+    );
+    const options = await browser.newPage();
+    await options.goto(`chrome-extension://${new URL(sw.url()).host}/options.html#history`);
+    await options.waitForSelector('.history-entry');
+    const fits = await options.evaluate(() => {
+      const sheet = document.querySelector('main').getBoundingClientRect();
+      const remove = document.querySelector('.history-entry button').getBoundingClientRect();
+      const time = document.querySelector('.history-meta time');
+      return {
+        inside: remove.right <= sheet.right,
+        noPageScroll: document.documentElement.scrollWidth <= innerWidth,
+        oneLine: time.getBoundingClientRect().height < 30,
+      };
+    });
+    assert.deepEqual(fits, { inside: true, noPageScroll: true, oneLine: true });
+    if (process.env.HISTORY_SHOT) await options.screenshot({ path: process.env.HISTORY_SHOT });
+    await options.close();
+    await page.bringToFront();
+  });
+
   await check('your glossary goes to the AI translator', async () => {
     const options = await browser.newPage();
     await options.goto(`chrome-extension://${new URL(sw.url()).host}/options.html`);
