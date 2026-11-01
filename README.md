@@ -34,7 +34,7 @@ Translate works out the direction by itself. Arabic goes to English and everythi
 
 ## Brief
 
-Brief explains what you selected in a few sentences, right there in the panel. It needs an API key, and you pick the service under Details, then Extension options.
+Brief explains what you selected in a few sentences, right there in the panel. Want something specific? Type a question in the box above the buttons and press Enter or Brief, and it answers that about your selection. It needs an API key, and you pick the service under Details, then Extension options.
 
 | Option | Cost |
 |---|---|
@@ -57,7 +57,7 @@ Your key stays in this browser profile, which also means anyone who can open tha
 
 The first time you use it, a small window asks you to pick a look. You can change your mind later with the **Look** button in the panel or in the settings.
 
-Windows is the default and follows Microsoft's Fluent design. Mac has frosted glass and the three window buttons. Linux looks like GNOME. Print is my favourite: your selection comes out as an instant photo with handwriting on it.
+Windows is the default and follows Microsoft's Fluent design. Mac has frosted glass and the three window buttons. Linux looks like GNOME. Print is my favourite: your selection comes out as an instant photo, with clean, easy to read text under it.
 
 The first three follow your light or dark mode. They use the real system fonts if you have them and your computer's default font if you don't.
 
@@ -72,6 +72,7 @@ Extension options is also where you switch Ask between Claude and ChatGPT.
 - Netflix and other protected sites show up as a black picture, so there's nothing to read.
 - Browsers don't let extensions run on their own pages or the Chrome Web Store. The icon shows `!` there.
 - Blurry, tiny or fancy text can come out wrong, and Arabic more often than English.
+- Lines and arrows in diagrams get cleaned out of the text, but a stray mark can still get through.
 - Capital I and small l look the same in a lot of fonts. It fixes "Al" to "AI" most of the time, but a title like "Al Revolution" can slip through.
 - Copy image needs an `https` page.
 - A video embedded from another site may keep playing while you select.
@@ -82,7 +83,7 @@ Translate and Search send the panel text to Google. Brief sends your selection, 
 
 ## Fonts
 
-The handwriting uses Caveat and Aref Ruqaa, both under the SIL Open Font License.
+The handwritten hint in the Print look uses Caveat and Aref Ruqaa, both under the SIL Open Font License.
 
 ## Development
 

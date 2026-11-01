@@ -62,14 +62,14 @@ async function translate(text, chosenTarget) {
   }
 }
 
-async function brief(text, imageDataUrl) {
+async function brief(text, imageDataUrl, question) {
   const { briefModel } = await chrome.storage.sync.get('briefModel');
   const keyName = keyNameFor(briefModel);
   const { [keyName]: apiKey } = await chrome.storage.local.get(keyName);
   if (!apiKey) {
-    return { noKey: true, provider: providerFor(briefModel), requestText: text ? briefRequestText(text) : '' };
+    return { noKey: true, provider: providerFor(briefModel), requestText: text ? briefRequestText(text, question) : '' };
   }
-  const { url, init } = buildBriefRequest({ apiKey, model: briefModel, text, imageDataUrl });
+  const { url, init } = buildBriefRequest({ apiKey, model: briefModel, text, question, imageDataUrl });
 
   let response;
   try {
@@ -158,7 +158,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const handlers = {
     'ss-recognize': () => recognize(message.dataUrl),
     'ss-translate': () => translate(message.text, message.target),
-    'ss-brief': () => brief(message.text, message.imageDataUrl),
+    'ss-brief': () => brief(message.text, message.imageDataUrl, message.question),
     'ss-fonts': fonts,
     'ss-search': () => chrome.tabs.create({ url: aiSearchUrl(message.text) }),
     'ss-ask': ask,

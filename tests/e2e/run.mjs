@@ -173,6 +173,18 @@ try {
     await panelText();
   });
 
+  await check('a box and lines around words leave only the words', async () => {
+    await reset();
+    await activate();
+    await page.evaluate(() => document.querySelector('#diagram').getBoundingClientRect());
+    await drag('#diagram');
+    assert.equal((await panelText()).trim(), 'Submits name and email');
+    await reset();
+    await activate();
+    await drag('#english');
+    await panelText();
+  });
+
   await check('frame is drawn under a strict content security policy', async () => {
     const blank = await inShadow((root) => {
       const canvas = root.querySelector('.frame');
@@ -509,7 +521,7 @@ try {
     await page.emulateMediaFeatures([]);
   });
 
-  await check('Print keeps the photo and handwriting', async () => {
+  await check('Print keeps the photo and shows the text in a readable font', async () => {
     await setTheme('print');
     await reset();
     await activate();
@@ -517,6 +529,8 @@ try {
     await drag('#english');
     await panelText();
     assert.equal(await isShown('.photo'), true);
+    const font = await inShadow((root) => getComputedStyle(root.querySelector('.text')).fontFamily);
+    assert.doesNotMatch(font, /Screen Select Hand/);
     await new Promise((resolve) => setTimeout(resolve, 1700));
     await shot('print');
     await page.keyboard.press('Escape');
@@ -782,6 +796,23 @@ try {
     assert.equal(call.init.headers.authorization, 'Bearer test-key');
     const image = JSON.parse(call.init.body).messages[1].content[1].image_url.url;
     assert.match(image, /^data:image\/jpeg;base64,/);
+  });
+
+  await check('a question typed in the panel goes with Brief on Enter', async () => {
+    await stubBrief(200, { choices: [{ message: { content: 'It means this.' } }] });
+    await inShadow((root) => root.querySelector('.question').focus());
+    await page.keyboard.type('what does this mean?');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(
+      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.brief').textContent === 'It means this.',
+      { timeout: 5000 },
+    );
+    const call = await sw.evaluate(() => globalThis.__briefCalls[0]);
+    assert.match(JSON.parse(call.init.body).messages[1].content[0].text, /<question>\s*what does this mean\?/);
+    assert.equal(await hostCount(), 1);
+    await inShadow((root) => {
+      root.querySelector('.question').value = '';
+    });
   });
 
   await check('Brief stops waiting and explains a server that never answers', async () => {

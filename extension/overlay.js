@@ -144,6 +144,12 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     .translation { background: var(--well); }
     .brief { background: var(--slip); }
     .translation:empty, .brief:empty { display: none; }
+    .question-form { margin: 0; }
+    .question {
+      width: 100%; padding: 7px 10px; border: 1px solid var(--line); border-radius: var(--control-radius);
+      background: var(--well); color: inherit; font: inherit;
+    }
+    .question::placeholder { color: var(--muted); opacity: 1; }
     .actions { display: flex; flex-wrap: wrap; gap: 6px; }
     .actions button {
       padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--control-radius);
@@ -154,7 +160,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     .choices span { width: 100%; color: var(--muted); font-size: 13px; }
     .actions [data-action='brief'] { border-color: transparent; background: var(--accent); color: var(--on-accent); }
     .actions [data-action='brief']:hover { background: var(--accent); filter: brightness(1.08); }
-    button:focus-visible, .text:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    button:focus-visible, .text:focus-visible, .question:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     .actions button:disabled { opacity: 0.55; cursor: default; }
     .status { color: var(--muted); font-size: 13px; }
     .status:empty { display: none; }
@@ -231,32 +237,35 @@ globalThis.__screenSelectStart = async (dataUrl) => {
         var(--corner) 100% 100% / 20px 3px, var(--corner) 100% 100% / 3px 20px;
       background-repeat: no-repeat;
     }
-    :host([data-theme='print']) .panel { padding: 14px 14px 12px; font-size: 15px; }
+    :host([data-theme='print']) .panel { padding: 14px 14px 12px; font-size: 16px; }
     :host([data-theme='print']) .photo {
       display: block; width: 100%; height: auto; max-height: 170px; object-fit: contain; background: #14161b;
     }
     :host([data-theme='print']) .panel[data-state='reading'] .photo { filter: brightness(0.22) sepia(0.7) contrast(0.75); }
     :host([data-theme='print']) .panel[data-state='ready'] .photo { filter: none; transition: filter 1.5s ease-out; }
     :host([data-theme='print']) .text {
-      min-height: 54px; padding: 2px 4px; border: 0; border-radius: 0; background: transparent;
-      font: 500 24px/1.22 var(--hand);
+      min-height: 64px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 0; background: var(--well);
+      line-height: 1.5;
     }
     :host([data-theme='print']) .translation {
-      border-top: 1px dashed var(--muted); border-radius: 0; background: transparent;
-      font: 500 22px/1.3 var(--hand);
+      border: 1px solid var(--line); border-radius: 0;
     }
     :host([data-theme='print']) .brief { border-radius: 0; }
+    :host([data-theme='print']) .question { border-radius: 0; }
     :host([data-theme='print']) .actions { gap: 4px 12px; }
     :host([data-theme='print']) .actions button,
     :host([data-theme='print']) .actions [data-action='brief'] {
       padding: 3px; border: 0; border-radius: 0; color: var(--text); filter: none; font: 600 14px/1.3 var(--ui-font);
-      background: linear-gradient(var(--marker), var(--marker)) no-repeat 0 100% / 0 100%;
+      background: linear-gradient(var(--marker), var(--marker)) no-repeat 0 100% / 100% 4px;
       transition: background-size 170ms ease-out;
     }
+    :host([data-theme='print']) .actions [data-action='brief'] { background-size: 100% 100%; }
     :host([data-theme='print']) .actions button:hover { background-size: 100% 100%; }
     :host([data-theme='print']) button:focus-visible { outline-color: var(--text); }
-    :host([data-theme='print']) .text:focus-visible { outline: 1px dashed var(--muted); outline-offset: 0; }
-    :host([data-theme='print']) .status { font: 500 20px/1.2 var(--hand); }
+    :host([data-theme='print']) .text:focus-visible, :host([data-theme='print']) .question:focus-visible {
+      outline: 2px solid var(--text); outline-offset: 0;
+    }
+    :host([data-theme='print']) .status { font-size: 14px; }
 
     .picker {
       position: fixed; inset: 0; display: grid; place-items: center; padding: 16px;
@@ -347,6 +356,10 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       <div class="translation" dir="auto"></div>
       <div class="brief" dir="auto"></div>
       <div class="actions choices" hidden></div>
+      <form class="question-form">
+        <input class="question" type="text" dir="auto" autocomplete="off" spellcheck="false"
+          placeholder="Ask about this selection (optional)" aria-label="Question for Brief" />
+      </form>
       <div class="actions">
         <button data-action="copy">Copy</button>
         <button data-action="copy-image">Copy image</button>
@@ -386,6 +399,8 @@ globalThis.__screenSelectStart = async (dataUrl) => {
   const translation = root.querySelector('.translation');
   const brief = root.querySelector('.brief');
   const choices = root.querySelector('.choices');
+  const questionForm = root.querySelector('.question-form');
+  const questionInput = root.querySelector('.question');
   const status = root.querySelector('.status');
   const buttons = [...root.querySelectorAll('[data-action]')];
   const picker = root.querySelector('.picker');
@@ -543,6 +558,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     translation.textContent = '';
     brief.textContent = '';
     choices.hidden = true;
+    questionInput.value = '';
     setStatus(theme === 'print' ? 'Developing the text...' : 'Reading the text...');
     placePanel(rect);
 
@@ -699,7 +715,8 @@ globalThis.__screenSelectStart = async (dataUrl) => {
 
     async brief() {
       choices.hidden = true;
-      setStatus('Writing a brief...');
+      const question = questionInput.value.trim();
+      setStatus(question ? 'Answering...' : 'Writing a brief...');
       const size = fitWithin(cropCanvas.width, cropCanvas.height, BRIEF_IMAGE_MAX_EDGE);
       const image = new OffscreenCanvas(size.width, size.height);
       const context = image.getContext('2d');
@@ -709,6 +726,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       const result = await chrome.runtime.sendMessage({
         type: 'ss-brief',
         text: textArea.value.trim(),
+        question,
         imageDataUrl: await toDataUrl(image, 'image/jpeg', BRIEF_IMAGE_QUALITY),
       });
       if (result?.noKey) {
@@ -785,6 +803,12 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       button.disabled = false;
     }
   }
+
+  questionForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const briefButton = root.querySelector('[data-action="brief"]');
+    if (!briefButton.disabled) runAction(briefButton, actions.brief);
+  });
 
   buttons.forEach((button) => {
     button.addEventListener('click', () => runAction(button, actions[button.dataset.action]));
