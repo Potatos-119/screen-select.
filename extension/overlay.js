@@ -737,7 +737,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
         ]);
       } else if (result?.brief) {
         brief.textContent = result.brief;
-        setStatus('');
+        setStatus(result.note ?? '');
       } else {
         setStatus(result?.error ?? 'Could not get a brief. Try again.');
       }

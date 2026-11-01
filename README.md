@@ -52,7 +52,7 @@ To set up the free one:
 2. Open the extension's Details page, then Extension options.
 3. Paste the key under **Your NVIDIA API key** and click **Save NVIDIA key**.
 
-Gemini is a good backup for when NVIDIA is slow. Get a free key at [aistudio.google.com](https://aistudio.google.com), save it under **Your Gemini API key**, and pick Google Gemini under **Brief uses**. On the free plan Google may use what you send to improve its products, so don't select anything private.
+Gemini is a good backup. If you save both free keys and one can't answer, the other one takes over by itself and the panel tells you. Get a free key at [aistudio.google.com](https://aistudio.google.com), save it under **Your Gemini API key**, and pick Google Gemini under **Brief uses**. On the free plan Google may use what you send to improve its products, so don't select anything private.
 
 Don't have a key? Brief will ask, and you can add one or copy a request and open your chat instead. If a service takes more than 25 seconds, Brief gives up and tells you.
 

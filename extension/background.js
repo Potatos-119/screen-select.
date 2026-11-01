@@ -1,5 +1,7 @@
 import {
+  BRIEF_ATTEMPT_MS,
   BRIEF_TIMEOUT_MS,
+  backupFor,
   briefRequestText,
   buildBriefRequest,
   buildTranslationRequest,
@@ -8,7 +10,7 @@ import {
   keyNameFor,
   parseBriefResponse,
   providerFor,
-  TRANSLATION_MODELS,
+  FREE_MODELS,
 } from './lib/brief.js';
 import { aiSearchUrl } from './lib/search.js';
 import {
@@ -52,8 +54,7 @@ async function recognize(dataUrl) {
 }
 
 async function translateWith(model, text, target) {
-  const keyName = keyNameFor(model);
-  const { [keyName]: apiKey } = await chrome.storage.local.get(keyName);
+  const apiKey = await readKey(model);
   if (!apiKey) return null;
   try {
     const { url, init } = buildTranslationRequest({ apiKey, model, text, target });
@@ -66,7 +67,7 @@ async function translateWith(model, text, target) {
 }
 
 async function translateWithAi(text, target) {
-  for (const model of TRANSLATION_MODELS) {
+  for (const model of FREE_MODELS) {
     const translation = await translateWith(model, text, target);
     if (translation) return translation;
   }
@@ -89,25 +90,43 @@ async function translate(text, chosenTarget) {
   }
 }
 
-async function brief(text, imageDataUrl, question) {
-  const { briefModel } = await chrome.storage.sync.get('briefModel');
-  const keyName = keyNameFor(briefModel);
-  const { [keyName]: apiKey } = await chrome.storage.local.get(keyName);
-  if (!apiKey) {
-    return { noKey: true, provider: providerFor(briefModel), requestText: text ? briefRequestText(text, question) : '' };
-  }
-  const { url, init } = buildBriefRequest({ apiKey, model: briefModel, text, question, imageDataUrl });
-
+async function askModel(model, apiKey, request, timeout) {
+  const { url, init } = buildBriefRequest({ ...request, apiKey, model });
   let response;
   try {
-    response = await fetch(url, { ...init, signal: AbortSignal.timeout(BRIEF_TIMEOUT_MS) });
+    response = await fetch(url, { ...init, signal: AbortSignal.timeout(timeout) });
   } catch (error) {
-    if (error?.name === 'TimeoutError') return { error: describeBriefTimeout(briefModel) };
+    if (error?.name === 'TimeoutError') return { error: describeBriefTimeout(model) };
     return { error: 'Could not reach the AI service. Check your connection and try again.' };
   }
   const json = await response.json().catch(() => null);
-  if (!response.ok) return { error: describeBriefError(response.status, json, briefModel) };
-  return { brief: parseBriefResponse(json, briefModel) };
+  if (!response.ok) return { error: describeBriefError(response.status, json, model) };
+  return { brief: parseBriefResponse(json, model) };
+}
+
+async function readKey(model) {
+  const keyName = keyNameFor(model);
+  const { [keyName]: apiKey } = await chrome.storage.local.get(keyName);
+  return apiKey;
+}
+
+async function brief(text, imageDataUrl, question) {
+  const { briefModel } = await chrome.storage.sync.get('briefModel');
+  const apiKey = await readKey(briefModel);
+  if (!apiKey) {
+    return { noKey: true, provider: providerFor(briefModel), requestText: text ? briefRequestText(text, question) : '' };
+  }
+
+  const request = { text, question, imageDataUrl };
+  const backup = backupFor(briefModel);
+  const backupKey = backup && (await readKey(backup));
+  if (!backupKey) return askModel(briefModel, apiKey, request, BRIEF_TIMEOUT_MS);
+
+  const first = await askModel(briefModel, apiKey, request, BRIEF_ATTEMPT_MS).catch((error) => ({ error: error.message }));
+  if (first.brief) return first;
+  const second = await askModel(backup, backupKey, request, BRIEF_ATTEMPT_MS).catch(() => ({}));
+  if (!second.brief) return first;
+  return { ...second, note: `${providerFor(briefModel)} could not answer, so ${providerFor(backup)} did.` };
 }
 
 // The page's content security policy can block font URLs, so the overlay gets the bytes.

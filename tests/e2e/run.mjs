@@ -863,6 +863,23 @@ try {
     await sw.evaluate(() => chrome.storage.sync.remove('briefModel'));
   });
 
+  await check('the other free service answers when the chosen one fails', async () => {
+    await sw.evaluate(() => chrome.storage.sync.set({ briefModel: 'gemini' }));
+    await sw.evaluate(() => {
+      globalThis.fetch = async (url) =>
+        String(url).includes('generativelanguage')
+          ? new Response('{}', { status: 500 })
+          : new Response(JSON.stringify({ choices: [{ message: { content: 'Backup brief.' } }] }), { status: 200 });
+    });
+    await clickButton('brief');
+    await page.waitForFunction(
+      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.brief').textContent === 'Backup brief.',
+      { timeout: 5000 },
+    );
+    assert.match(await status(), /Gemini could not answer, so NVIDIA did/);
+    await sw.evaluate(() => chrome.storage.sync.remove('briefModel'));
+  });
+
   await check('Translate uses Gemini when only a Gemini key is saved', async () => {
     const { nvidiaKey } = await sw.evaluate(() => chrome.storage.local.get('nvidiaKey'));
     await sw.evaluate(() => chrome.storage.local.remove('nvidiaKey'));

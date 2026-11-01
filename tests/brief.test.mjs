@@ -8,7 +8,8 @@ import {
   describeBriefTimeout,
   buildBriefRequest,
   buildTranslationRequest,
-  TRANSLATION_MODELS,
+  FREE_MODELS,
+  backupFor,
   parseBriefResponse,
   describeBriefError,
   briefRequestText,
@@ -95,7 +96,7 @@ test('the chat request carries the question', () => {
 });
 
 test('AI translation uses the free NVIDIA key and sends no picture', () => {
-  assert.deepEqual(TRANSLATION_MODELS, ['nvidia', 'gemini']);
+  assert.deepEqual(FREE_MODELS, ['nvidia', 'gemini']);
   const { url, init } = buildTranslationRequest({ apiKey: 'test-key', model: 'nvidia', text: 'java Full-Stack', target: 'ar' });
   const { messages, chat_template_kwargs: options } = JSON.parse(init.body);
   assert.equal(url, 'https://integrate.api.nvidia.com/v1/chat/completions');
@@ -117,11 +118,18 @@ test('Gemini uses its own address, key and model, with the picture', () => {
   const body = JSON.parse(init.body);
   assert.equal(url, 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions');
   assert.equal(init.headers.authorization, 'Bearer test-key');
-  assert.equal(body.model, 'gemini-3.8-flash');
-  assert.equal(body.reasoning_effort, 'low');
+  assert.equal(body.model, 'gemini-3.5-flash-lite');
   assert.equal(body.chat_template_kwargs, undefined);
   assert.equal(body.messages[1].content[1].type, 'image_url');
   assert.equal(keyNameFor('gemini'), 'geminiKey');
+});
+
+test('each free option backs up the other, and paid options have no backup', () => {
+  assert.equal(backupFor('nvidia'), 'gemini');
+  assert.equal(backupFor('gemini'), 'nvidia');
+  assert.equal(backupFor(undefined), 'gemini');
+  assert.equal(backupFor('opus'), null);
+  assert.equal(backupFor('haiku'), null);
 });
 
 test('Gemini replies and errors are read properly', () => {

@@ -6,6 +6,7 @@ const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat
 const MAX_TOKENS = 2000;
 // Stays under the 30 seconds a browser lets a service worker wait for a reply.
 export const BRIEF_TIMEOUT_MS = 25000;
+export const BRIEF_ATTEMPT_MS = 12000;
 
 const DEFAULT_MODEL = 'nvidia';
 const MODELS = {
@@ -21,8 +22,7 @@ const MODELS = {
     provider: 'Gemini',
     keyName: 'geminiKey',
     url: GEMINI_URL,
-    id: 'gemini-3.8-flash',
-    options: { reasoning_effort: 'low' },
+    id: 'gemini-3.5-flash-lite',
   },
   opus: { provider: 'Claude', keyName: 'apiKey', id: 'claude-opus-5-5', fallbacks: true },
   haiku: { provider: 'Claude', keyName: 'apiKey', id: 'claude-haiku-5-5', fallbacks: false },
@@ -104,8 +104,13 @@ function buildChatRequest({ apiKey, model, text, question, imageDataUrl }) {
   ]);
 }
 
-// Free options only, so Translate never spends anyone's paid credit.
-export const TRANSLATION_MODELS = ['nvidia', 'gemini'];
+// Used for Translate and as backups, because neither spends anyone's paid credit.
+export const FREE_MODELS = ['nvidia', 'gemini'];
+
+export function backupFor(model) {
+  const chosen = MODELS[model] ? model : DEFAULT_MODEL;
+  return FREE_MODELS.includes(chosen) ? FREE_MODELS.find((other) => other !== chosen) : null;
+}
 
 export function buildTranslationRequest({ apiKey, model, text, target }) {
   return chatRequest(apiKey, model, [
