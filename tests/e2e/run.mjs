@@ -5,7 +5,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import puppeteer from 'puppeteer-core';
 
-const BROWSER = process.env.BROWSER_PATH ?? '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser';
+const BROWSERS = {
+  brave: '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+  chrome: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  edge: '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+};
+const BROWSER = process.env.BROWSER_PATH ?? BROWSERS[process.env.BROWSER ?? 'brave'];
+console.log(`browser: ${BROWSER}`);
 
 const SOURCE = process.env.EXT_DIR ?? 'extension';
 
@@ -49,6 +55,7 @@ async function check(name, fn) {
   } catch (error) {
     failed += 1;
     console.log(`FAIL - ${name}\n  ${error.message}`);
+    if (globalThis.__panelStatus) console.log(`  panel said: ${await globalThis.__panelStatus().catch(() => 'nothing')}`);
   }
 }
 
@@ -120,6 +127,7 @@ try {
     }, name);
   const choicesShown = () => inShadow((root) => !root.querySelector('.choices').hidden);
   const status = () => inShadow((root) => root.querySelector('.status').textContent);
+  globalThis.__panelStatus = status;
   const hostCount = () => page.$$eval('#screen-select-host', (hosts) => hosts.length);
   const waitForTab = (prefix) =>
     browser.waitForTarget((t) => t.url().startsWith(prefix), { timeout: 10000 });
@@ -311,6 +319,100 @@ try {
     const text = await panelText();
     console.log('  read:', JSON.stringify(text));
     assert.match(text, /مرحبا/);
+  });
+
+  await check('a table is read as a table and translated as one', async () => {
+    await reset();
+    await activate();
+    await drag('#prices');
+    const text = await panelText();
+    console.log('  read:', JSON.stringify(text));
+    assert.match(text, /Plan\tPrice\tUsers/);
+    assert.match(text, /Team\t12\t10/);
+    assert.match(await status(), /Found a table: 3 rows, 3 columns/);
+    // Google's free service turns tests away at times, so it answers line by line here.
+    await sw.evaluate(() => {
+      globalThis.__realFetch = globalThis.fetch;
+      globalThis.fetch = async (url, init) => {
+        if (!String(url).startsWith('https://translate.googleapis.com/')) return globalThis.__realFetch(url, init);
+        const lines = new URL(url).searchParams.get('q').split('\n');
+        globalThis.__tableRequest = lines;
+        const words = { Plan: 'الخطة', Price: 'السعر', Users: 'المستخدمون', Free: 'مجانية', Team: 'فريق' };
+        return Response.json([[[lines.map((line) => words[line] ?? 'نص').join('\n'), lines.join('\n')]]]);
+      };
+    });
+    await clickButton('translate');
+    await page.waitForFunction(
+      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.translation table'),
+      { timeout: 20000 },
+    );
+    const sent = await sw.evaluate(() => {
+      globalThis.fetch = globalThis.__realFetch;
+      return globalThis.__tableRequest;
+    });
+    assert.deepEqual(sent, ['Plan', 'Price', 'Users', 'Free', 'Team'], 'only cells with words are sent, one per line');
+    const table = await inShadow((root) => {
+      const node = root.querySelector('.translation table');
+      return { dir: node.dir, cells: [...node.rows].map((row) => [...row.cells].map((cell) => cell.textContent)) };
+    });
+    console.log('  translated:', JSON.stringify(table));
+    assert.equal(table.dir, 'rtl');
+    assert.equal(table.cells.length, 3);
+    assert.deepEqual(table.cells.map((row) => row.length), [3, 3, 3]);
+    assert.deepEqual(table.cells[2].slice(1), ['12', '10']);
+    assert.deepEqual(table.cells[0], ['الخطة', 'السعر', 'المستخدمون']);
+    assert.match(await status(), /Translated the table/);
+    if (process.env.TABLE_SHOT) await page.screenshot({ path: process.env.TABLE_SHOT });
+  });
+
+  await check('the panel can be dragged away and stays there', async () => {
+    await reset();
+    await activate();
+    await drag('#english');
+    await panelText();
+    const bar = await inShadow((root) => {
+      const rect = root.querySelector('.titlebar').getBoundingClientRect();
+      return { x: rect.x + 60, y: rect.y + rect.height / 2 };
+    });
+    const before = await inShadow((root) => root.querySelector('.panel').getBoundingClientRect().toJSON());
+    await page.mouse.move(bar.x, bar.y);
+    await page.mouse.down();
+    await page.mouse.move(bar.x + 400, bar.y + 300, { steps: 6 });
+    await page.mouse.up();
+    const after = await inShadow((root) => root.querySelector('.panel').getBoundingClientRect().toJSON());
+    assert.equal(Math.round(after.x - before.x), 400);
+    assert.equal(Math.round(after.y - before.y), 300);
+  });
+
+  await check('the box can be resized to take in more, and is read again', async () => {
+    const panelBefore = await inShadow((root) => root.querySelector('.panel').getBoundingClientRect().toJSON());
+    const corner = await inShadow((root) => {
+      const rect = root.querySelector('.handle[data-edge="se"]').getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    });
+    const arabic = await page.$eval('#arabic', (el) => el.getBoundingClientRect().toJSON());
+    await page.mouse.move(corner.x, corner.y);
+    await page.mouse.down();
+    await page.mouse.move(Math.max(corner.x, arabic.right + 6), arabic.bottom + 6, { steps: 6 });
+    await page.mouse.up();
+    const text = await panelText();
+    assert.match(text, /Perception is the first step/);
+    assert.match(text, /مرحبا/);
+    const panelAfter = await inShadow((root) => root.querySelector('.panel').getBoundingClientRect().toJSON());
+    assert.equal(Math.round(panelAfter.x), Math.round(panelBefore.x), 'a moved panel stays put');
+  });
+
+  await check('the box can be moved by dragging inside it', async () => {
+    const box = await inShadow((root) => root.querySelector('.box').getBoundingClientRect().toJSON());
+    const english = await page.$eval('#english', (el) => el.getBoundingClientRect().toJSON());
+    const ai = await page.$eval('#ai', (el) => el.getBoundingClientRect().toJSON());
+    const start = { x: box.x + box.width / 2, y: box.y + 10 };
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x + (ai.x - english.x), start.y + (ai.y - english.y), { steps: 6 });
+    await page.mouse.up();
+    assert.match(await panelText(), /AI does the work/);
+    await page.keyboard.press('Escape');
   });
 
   await check('reads a playing video and resumes only what it paused', async () => {

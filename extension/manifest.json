@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Screen Select",
-  "version": "1.15.1",
+  "version": "1.16.0",
+  "minimum_chrome_version": "116",
   "description": "Select text from anything on screen, even videos, then copy, translate, search or ask AI.",
   "permissions": ["activeTab", "scripting", "offscreen", "clipboardWrite", "storage"],
   "host_permissions": [

@@ -1,5 +1,5 @@
 globalThis.__screenSelectStart = async (dataUrl) => {
-  const { toImageRect, isUsableDrag, upscaleFactor, fitWithin } = globalThis.ScreenSelectCrop;
+  const { toImageRect, isUsableDrag, upscaleFactor, fitWithin, adjustRect } = globalThis.ScreenSelectCrop;
   const { LOOKS, PREVIEW_CSS, normalizeLook, cardMarkup } = globalThis.ScreenSelectLooks;
   const saved = await chrome.storage.sync.get(['theme', 'lookChosen']);
   let theme = normalizeLook(saved.theme);
@@ -7,6 +7,10 @@ globalThis.__screenSelectStart = async (dataUrl) => {
   const BRIEF_IMAGE_QUALITY = 0.8;
   const ASK_PLACEHOLDER = 'Ask about this selection (optional)';
   const FOLLOW_UP_PLACEHOLDER = 'Ask a follow-up question';
+  const EDGES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+  // Enough of a dragged panel stays on screen to grab it again.
+  const PANEL_KEEP_VISIBLE = 120;
+  const COPY_KEY = /Mac|iPhone|iPad/.test(navigator.userAgentData?.platform ?? navigator.platform) ? 'Cmd+C' : 'Ctrl+C';
 
   const STYLE = `
     :host {
@@ -106,12 +110,27 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     }
     .hint[hidden], .box[hidden], .size[hidden], .panel[hidden], .choices[hidden] { display: none; }
     .box { position: fixed; pointer-events: none; border: 2px solid var(--accent); border-radius: 2px; }
+    .box.ready { pointer-events: auto; cursor: move; touch-action: none; }
+    .handle {
+      position: absolute; display: none; width: 12px; height: 12px; margin: -7px 0 0 -7px;
+      border: 2px solid var(--accent); border-radius: 50%; background: #ffffff; touch-action: none;
+    }
+    .box.ready .handle { display: block; }
+    .handle[data-edge='nw'] { left: 0; top: 0; cursor: nwse-resize; }
+    .handle[data-edge='n'] { left: 50%; top: 0; cursor: ns-resize; }
+    .handle[data-edge='ne'] { left: 100%; top: 0; cursor: nesw-resize; }
+    .handle[data-edge='e'] { left: 100%; top: 50%; cursor: ew-resize; }
+    .handle[data-edge='se'] { left: 100%; top: 100%; cursor: nwse-resize; }
+    .handle[data-edge='s'] { left: 50%; top: 100%; cursor: ns-resize; }
+    .handle[data-edge='sw'] { left: 0; top: 100%; cursor: nesw-resize; }
+    .handle[data-edge='w'] { left: 0; top: 50%; cursor: ew-resize; }
     .size { display: none; }
     .photo, .flash { display: none; }
     .titlebar {
       position: relative; display: flex; align-items: center; gap: 8px; min-height: 34px; margin: 0 -14px;
-      padding: 0 14px;
+      padding: 0 14px; cursor: move; user-select: none;
     }
+    .panel.dragging { user-select: none; cursor: move; }
     .light { display: none; }
     .title { font-size: 12px; color: var(--text); }
     .close {
@@ -144,6 +163,11 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       white-space: pre-wrap; user-select: text;
     }
     .translation { background: var(--well); }
+    .text { tab-size: 4; }
+    .sheet { width: 100%; border-collapse: collapse; white-space: normal; }
+    .sheet td { padding: 4px 8px; border: 1px solid var(--line); vertical-align: top; }
+    .sheet tr:first-child td { font-weight: 600; }
+    .sheet-line { margin: 0 0 6px; }
     .brief { max-height: 40vh; background: var(--slip); }
     .turn-question { margin: 0 0 4px; color: var(--muted); font-weight: 600; }
     .turn-answer { margin: 0; }
@@ -243,6 +267,8 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       background-repeat: no-repeat;
     }
     :host([data-theme='print']) .panel { padding: 14px 14px 12px; font-size: 16px; }
+    :host([data-theme='print']) .photo { cursor: move; }
+    :host([data-theme='print']) .handle { border-color: var(--marker); background: #14161b; }
     :host([data-theme='print']) .photo {
       display: block; width: 100%; height: auto; max-height: 170px; object-fit: contain; background: #14161b;
     }
@@ -347,16 +373,16 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     <canvas class="lit"></canvas>
     <div class="flash"></div>
     <div class="hint">Drag over anything. Esc cancels.</div>
-    <div class="box" hidden></div>
+    <div class="box" hidden>${EDGES.map((edge) => `<span class="handle" data-edge="${edge}"></span>`).join('')}</div>
     <div class="size" hidden></div>
     <div class="panel" hidden>
       <div class="titlebar">
-        <span class="title">Screen Select</span>
+        <span class="title" title="Drag to move">Screen Select</span>
         <span class="light minimize"></span>
         <span class="light zoom"></span>
         <button class="close" aria-label="Close">&times;</button>
       </div>
-      <canvas class="photo"></canvas>
+      <canvas class="photo" title="Drag to move"></canvas>
       <textarea class="text" dir="auto" spellcheck="false" aria-label="Text from your selection"></textarea>
       <div class="translation" dir="auto"></div>
       <div class="brief" dir="auto"></div>
@@ -482,6 +508,11 @@ globalThis.__screenSelectStart = async (dataUrl) => {
   let dragStart = null;
   let dragRect = null;
   let panelAnchor = null;
+  let panelMoved = false;
+  let panelDrag = null;
+  let boxRect = null;
+  let boxEdit = null;
+  let translatedText = '';
   let requestId = 0;
   let briefPort = null;
   let turns = [];
@@ -507,9 +538,17 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     size.style.top = `${Math.min(rect.y + rect.height + 8, innerHeight - 28)}px`;
   }
 
+  function movePanelTo(left, top) {
+    const { width } = panel.getBoundingClientRect();
+    panel.style.left = `${Math.min(Math.max(left, PANEL_KEEP_VISIBLE - width), innerWidth - PANEL_KEEP_VISIBLE)}px`;
+    panel.style.top = `${Math.min(Math.max(top, 0), innerHeight - PANEL_KEEP_VISIBLE / 3)}px`;
+  }
+
   function placePanel(rect) {
     panelAnchor = rect;
     panel.hidden = false;
+    // Once the panel is dragged away it stays where it was put.
+    if (panelMoved) return;
     const { width, height } = panel.getBoundingClientRect();
     const gap = 8;
     const fitsBelow = rect.y + rect.height + gap + height <= innerHeight;
@@ -563,11 +602,14 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     const context = large.getContext('2d');
     context.imageSmoothingQuality = 'high';
     context.drawImage(cropCanvas, 0, 0, large.width, large.height);
+    const pixels = context.getImageData(0, 0, large.width, large.height);
+    if (globalThis.ScreenSelectCrop.eraseRuleLines(pixels)) context.putImageData(pixels, 0, 0);
 
     panel.dataset.state = 'reading';
     textArea.value = '';
     textArea.style.height = '';
     translation.textContent = '';
+    translatedText = '';
     brief.textContent = '';
     choices.hidden = true;
     resetConversation();
@@ -590,7 +632,11 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       setStatus(`Could not read this: ${result.error}`);
     } else if (result?.text) {
       textArea.value = result.text;
-      setStatus('');
+      setStatus(
+        result.table
+          ? `Found a table: ${result.table.rows} rows, ${result.table.columns} columns. Copy pastes it into a spreadsheet.`
+          : '',
+      );
       startHistoryEntry(result.text);
       fitTextBox();
       // Focus puts the cursor at the end, which would scroll long text out of view.
@@ -607,6 +653,9 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     frame.setPointerCapture(event.pointerId);
     dragStart = { x: event.clientX, y: event.clientY };
     dragRect = null;
+    boxRect = null;
+    panelMoved = false;
+    box.classList.remove('ready');
     requestId += 1;
     panel.hidden = true;
     hint.hidden = true;
@@ -628,6 +677,8 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     dragStart = null;
     size.hidden = true;
     if (rect && isUsableDrag(rect)) {
+      boxRect = rect;
+      box.classList.add('ready');
       readSelection(rect);
     } else {
       box.hidden = true;
@@ -642,6 +693,64 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     size.hidden = true;
     lit.style.clipPath = 'inset(100%)';
   });
+
+  // After a selection, the box can be moved or resized to take in more, and is read again.
+  box.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0 || !boxRect) return;
+    event.stopPropagation();
+    box.setPointerCapture(event.pointerId);
+    boxEdit = { edge: event.target.dataset.edge ?? 'move', x: event.clientX, y: event.clientY, rect: boxRect, current: boxRect };
+  });
+
+  box.addEventListener('pointermove', (event) => {
+    if (!boxEdit) return;
+    const { edge, x, y, rect } = boxEdit;
+    boxEdit.current = adjustRect(rect, edge, event.clientX - x, event.clientY - y, innerWidth, innerHeight);
+    placeBox(boxEdit.current);
+  });
+
+  function finishBoxEdit() {
+    if (!boxEdit) return;
+    const { rect, current } = boxEdit;
+    boxEdit = null;
+    size.hidden = true;
+    const changed = ['x', 'y', 'width', 'height'].some((key) => Math.round(rect[key]) !== Math.round(current[key]));
+    if (!changed) return;
+    if (!isUsableDrag(current)) {
+      placeBox(rect);
+      size.hidden = true;
+      return;
+    }
+    boxRect = current;
+    readSelection(current);
+  }
+
+  box.addEventListener('pointerup', finishBoxEdit);
+  box.addEventListener('pointercancel', finishBoxEdit);
+
+  // The panel moves by its title bar or any empty part of it, so it can uncover the page.
+  panel.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    if (event.target.closest('button, textarea, input, select, a, .translation, .brief')) return;
+    const { left, top } = panel.getBoundingClientRect();
+    panelDrag = { x: event.clientX - left, y: event.clientY - top };
+    panel.setPointerCapture(event.pointerId);
+    panel.classList.add('dragging');
+  });
+
+  panel.addEventListener('pointermove', (event) => {
+    if (!panelDrag) return;
+    panelMoved = true;
+    movePanelTo(event.clientX - panelDrag.x, event.clientY - panelDrag.y);
+  });
+
+  function finishPanelDrag() {
+    panelDrag = null;
+    panel.classList.remove('dragging');
+  }
+
+  panel.addEventListener('pointerup', finishPanelDrag);
+  panel.addEventListener('pointercancel', finishPanelDrag);
 
   async function copyText(text) {
     if (navigator.clipboard) {
@@ -685,6 +794,43 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     choices.hidden = false;
   }
 
+  function showTable(parts) {
+    const nodes = [];
+    let table = null;
+    for (const part of parts) {
+      if (part.type !== 'row') {
+        table = null;
+        const line = document.createElement('p');
+        line.className = 'sheet-line';
+        line.dir = 'auto';
+        line.textContent = part.text;
+        nodes.push(line);
+        continue;
+      }
+      if (!table) {
+        table = document.createElement('table');
+        table.className = 'sheet';
+        nodes.push(table);
+      }
+      const row = table.insertRow();
+      part.cells.forEach((text) => {
+        const cell = row.insertCell();
+        // Cells with only numbers follow the table's direction.
+        if (/\p{L}/u.test(text)) cell.dir = 'auto';
+        cell.textContent = text;
+      });
+    }
+    // An Arabic table reads from the right, so its first column goes on the right.
+    nodes
+      .filter((node) => node.tagName === 'TABLE')
+      .forEach((node) => {
+        const letters = node.textContent.match(/\p{L}/gu)?.length ?? 0;
+        const arabic = node.textContent.match(/\p{Script=Arabic}/gu)?.length ?? 0;
+        node.dir = arabic > letters / 2 ? 'rtl' : 'ltr';
+      });
+    translation.replaceChildren(...nodes);
+  }
+
   async function translateText(target) {
     const text = textArea.value.trim();
     if (!text) return setStatus('There is no text to translate.');
@@ -696,8 +842,14 @@ globalThis.__screenSelectStart = async (dataUrl) => {
         ['English', () => translateText('en')],
         ['Arabic', () => translateText('ar')],
       ]);
+    } else if (result?.table) {
+      showTable(result.table);
+      translatedText = result.translation;
+      setStatus(`Translated the table with ${result.engine}.`);
+      saveToHistory({ translation: result.translation });
     } else if (result?.translation) {
       translation.textContent = result.translation;
+      translatedText = result.translation;
       setStatus(`Translated with ${result.engine}.`);
       saveToHistory({ translation: result.translation });
     } else {
@@ -750,8 +902,10 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     });
   }
 
+  // Edge and Windows offer natural-sounding online voices, which read far better than the old ones.
   function speechVoice(lang) {
-    return speechSynthesis.getVoices().find((voice) => voice.lang.toLowerCase().startsWith(lang));
+    const voices = speechSynthesis.getVoices().filter((voice) => voice.lang.toLowerCase().startsWith(lang));
+    return voices.find((voice) => /Natural|Online|Neural/i.test(voice.name)) ?? voices.find((voice) => voice.default) ?? voices[0];
   }
 
   async function voicesReady() {
@@ -764,7 +918,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
 
   function textToRead() {
     const lastAnswer = turns.at(-1)?.answer;
-    return lastAnswer || translation.textContent || textArea.value.trim();
+    return lastAnswer || translatedText || textArea.value.trim();
   }
 
   function setReadLabel(label) {
@@ -783,7 +937,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
         setStatus('Copied.');
       } else {
         textArea.select();
-        setStatus('Could not copy. The text is selected, so press Cmd+C.');
+        setStatus(`Could not copy. The text is selected, so press ${COPY_KEY}.`);
       }
     },
 

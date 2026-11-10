@@ -13,6 +13,8 @@
         position: fixed; top: 410px; right: 24px; margin: 0; padding: 14px 40px 14px 20px; font-size: 18px;
         border-top: 3px dashed #000; border-bottom: 3px solid #000; border-left: 3px solid #000; border-right: 3px solid #000;
       }
+      #prices { position: fixed; bottom: 40px; right: 24px; border-collapse: collapse; font-size: 22px; }
+      #prices td { padding: 6px 30px; border: 1px solid #999; }
       video { display: block; width: 480px; height: 180px; margin-bottom: 16px; background: #000; }
     </style>
   </head>
@@ -23,6 +25,11 @@
     <p id="ai">AI does the work for you</p>
     <p id="diagram">Submits name and email</p>
     <p id="long">First line of the page<br />Second line of the page<br />Third line of the page<br />Fourth line of the page<br />Fifth line of the page<br />Sixth line of the page<br />Seventh line of the page</p>
+    <table id="prices">
+      <tr><td>Plan</td><td>Price</td><td>Users</td></tr>
+      <tr><td>Free</td><td>0</td><td>1</td></tr>
+      <tr><td>Team</td><td>12</td><td>10</td></tr>
+    </table>
     <video id="playing" muted></video>
     <video id="paused" muted></video>
     <script>
