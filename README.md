@@ -109,6 +109,33 @@ The first time it opens, Vision can take about 40 seconds to load in the backgro
 
 Keys are encrypted in your Mac's Keychain, and your settings and history stay on this computer. The box works on the screen your mouse is on.
 
+## Desktop app for Windows
+
+The same desktop app runs on Windows too, and it's free. It reads text with Tesseract, in English and Arabic.
+
+Download it from the [Releases](../../releases) page. There are two files:
+
+- `Screen-Select-Setup-<version>.exe` installs it, with a Start menu shortcut.
+- `Screen-Select-<version>-portable.exe` runs without installing. Keep it anywhere, even on a USB stick.
+
+It isn't signed by Microsoft, so the first time you open it Windows shows **Windows protected your PC**. Click **More info**, then **Run anyway**. It only asks once.
+
+1. It lives in the tray, by the clock. If you can't see it, click the `^` arrow there.
+2. Click the tray icon, open **Settings** and paste your keys. The desktop app can't see the keys saved in your browser. With no key, Brief uses the free shared AI.
+3. Press `Alt+Shift+D` and drag a box. `Esc` cancels.
+
+Keys are encrypted with your Windows account, and your settings and history stay on this computer. The box works on the screen your mouse is on.
+
+To build it yourself, you'll need Node:
+
+```bash
+cd desktop
+npm install
+npm run dist:win
+```
+
+Both files come out in `desktop/dist`.
+
 ## What it can't do
 
 - Netflix and other protected sites show up as a black picture, so there's nothing to read.

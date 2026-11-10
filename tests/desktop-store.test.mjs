@@ -48,7 +48,8 @@ test('API keys are encrypted on disk but plain when read', async () => {
   assert.deepEqual(await local.get('nvidiaKey'), { nvidiaKey: 'nvapi-secret' });
 });
 
-test('only the owner can read the file', async () => {
+// Windows has no file modes. The file sits in the user's own folder, which other users can't read.
+test('only the owner can read the file', { skip: process.platform === 'win32' }, async () => {
   const path = tempPath();
   await createStore({ path, secrets }).local.set({ glossary: '' });
   assert.equal(statSync(path).mode & 0o077, 0);

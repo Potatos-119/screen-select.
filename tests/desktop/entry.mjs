@@ -140,13 +140,16 @@ app.whenReady().then(async () => {
       assert.match(await inPanel((root) => root.querySelector('.translation').textContent), /ترجمة/);
     });
 
-    await check('Brief without a key offers to add one', async () => {
+    await check('Brief with no key uses the free shared AI', async () => {
       await click('brief');
-      await waitForPanel((root) => root.querySelector('.choices').textContent.includes('Add a key'));
+      await waitForPanel((root) => root.querySelector('.turn-answer')?.textContent === 'An agent acts.');
+      const call = requests.at(-1);
+      assert.match(call.url, /workers\.dev/);
+      assert.equal(call.init.headers.authorization, undefined);
     });
 
     await check('Add a key opens settings above the selection, and the key is saved safely', async () => {
-      await inPanel((root) => root.querySelector('.choices button').click());
+      await page.evaluate(() => chrome.runtime.sendMessage({ type: 'ss-settings' }));
       const settings = await findPage('options.html');
       await settings.waitForSelector('#nvidia-key');
       await settings.type('#nvidia-key', 'nvapi-test-key');
@@ -223,7 +226,8 @@ app.whenReady().then(async () => {
       await page.waitForFunction(() => !document.querySelector('dialog'));
     });
 
-    await check('Apple Vision takes over once it has loaded', async () => {
+    // Windows reads with Tesseract only, so this one is for a Mac.
+    if (process.platform === 'darwin') await check('Apple Vision takes over once it has loaded', async () => {
       const deadline = Date.now() + VISION_WAIT_MS;
       let text = '';
       while (Date.now() < deadline && !text.includes('Copy to clipboard')) {
@@ -242,7 +246,10 @@ app.whenReady().then(async () => {
     console.log(`FAIL - the test stopped early\n  ${error.message}`);
   } finally {
     await browser.disconnect();
-    rmSync(userData, { recursive: true, force: true });
+    // Windows keeps the folder locked while the app is still open, and the system cleans it later.
+    try {
+      rmSync(userData, { recursive: true, force: true });
+    } catch {}
     console.log(failed ? `${failed} failed` : 'all passed');
     app.exit(failed ? 1 : 0);
   }

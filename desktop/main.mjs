@@ -28,6 +28,7 @@ const SCHEME = 'screen-select';
 const PAGE_BASE = `${SCHEME}://app/`;
 const SHORTCUT = 'Alt+Shift+D';
 const SHORTCUT_LABEL = process.platform === 'darwin' ? 'Option+Shift+D' : 'Alt+Shift+D';
+const ICON_PLACE = process.platform === 'darwin' ? 'menu bar icon' : 'tray icon';
 const PERMISSION_CHECK_MS = 5000;
 const PRIVACY_SETTINGS = 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture';
 const MIME_TYPES = {
@@ -49,6 +50,7 @@ if (!app.requestSingleInstanceLock()) app.quit();
 const webPreferences = { preload: join(ROOT, 'preload.cjs'), sandbox: true, contextIsolation: true };
 
 let overlay = null;
+let overlayLoaded = null;
 let overlayOpen = false;
 let textReader = null;
 let settings = null;
@@ -127,7 +129,8 @@ function createOverlay() {
   overlay.setAlwaysOnTop(true, 'screen-saver');
   overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
   keepToAppPages(overlay);
-  overlay.loadURL(`${PAGE_BASE}overlay.html`);
+  // The shortcut can be pressed before the page has loaded, and its first message would be lost.
+  overlayLoaded = overlay.loadURL(`${PAGE_BASE}overlay.html`);
 }
 
 async function readWithTesseract(dataUrl) {
@@ -241,10 +244,13 @@ async function toggleSelection() {
   try {
     const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
     const dataUrl = await captureDisplay(display);
+    await overlayLoaded;
     overlay.setBounds(display.bounds);
     overlayOpen = true;
     overlay.webContents.send('ss-start', dataUrl);
     overlay.show();
+    // Moving onto a screen with different scaling can resize the window on Windows, so the size is set again.
+    if (process.platform === 'win32') overlay.setBounds(display.bounds);
     overlay.focus();
   } catch (error) {
     overlayOpen = false;
@@ -256,17 +262,24 @@ async function toggleSelection() {
 
 function createTray() {
   const icon = nativeImage.createFromPath(join(ROOT, 'extension/icons/icon16.png'));
+  // At 125% and 150% scaling Windows draws a bigger tray icon, and the 16px one would look blurry.
+  const large = nativeImage.createFromPath(join(ROOT, 'extension/icons/icon48.png'));
+  for (const scaleFactor of [1.25, 1.5, 2]) {
+    const size = Math.round(16 * scaleFactor);
+    icon.addRepresentation({ scaleFactor, buffer: large.resize({ width: size, height: size, quality: 'best' }).toPNG() });
+  }
   tray = new Tray(icon);
   tray.setToolTip(`Screen Select (${SHORTCUT_LABEL})`);
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: `Select on screen (${SHORTCUT_LABEL})`, click: toggleSelection },
-      { label: 'History', click: () => openSettings('#history') },
-      { label: 'Settings', click: () => openSettings('') },
-      { type: 'separator' },
-      { label: 'Quit Screen Select', role: 'quit' },
-    ]),
-  );
+  const menu = Menu.buildFromTemplate([
+    { label: `Select on screen (${SHORTCUT_LABEL})`, click: toggleSelection },
+    { label: 'History', click: () => openSettings('#history') },
+    { label: 'Settings', click: () => openSettings('') },
+    { type: 'separator' },
+    { label: 'Quit Screen Select', role: 'quit' },
+  ]);
+  tray.setContextMenu(menu);
+  // Windows only shows the menu on a right-click, so a left-click on the tray icon opens it too.
+  if (process.platform === 'win32') tray.on('click', () => tray.popUpContextMenu());
 }
 
 function listenToPages() {
@@ -332,7 +345,7 @@ async function start() {
   createOverlay();
   createTray();
   if (!globalShortcut.register(SHORTCUT, toggleSelection)) {
-    dialog.showErrorBox('Screen Select', `Another app is using ${SHORTCUT_LABEL}. Use the menu bar icon instead.`);
+    dialog.showErrorBox('Screen Select', `Another app is using ${SHORTCUT_LABEL}. Use the ${ICON_PLACE} instead.`);
   }
   if (needsPermission()) {
     await askForPermission();
@@ -341,8 +354,10 @@ async function start() {
 }
 
 app.dock?.hide();
+// Windows uses this to group the app's windows and notifications under its own name.
+if (process.platform === 'win32') app.setAppUserModelId('com.screenselect.desktop');
 app.on('second-instance', toggleSelection);
 app.on('will-quit', () => globalShortcut.unregisterAll());
-// It lives in the menu bar, so closing the last window doesn't quit.
+// It lives in the menu bar or the tray, so closing the last window doesn't quit.
 app.on('window-all-closed', () => {});
 app.whenReady().then(start);

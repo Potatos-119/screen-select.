@@ -11,6 +11,7 @@
     "prepare-app": "node prepare.mjs",
     "start": "npm run prepare-app && electron .",
     "dist": "npm run prepare-app && electron-builder --mac dir",
+    "dist:win": "npm run prepare-app && electron-builder --win",
     "test": "npm run prepare-app && electron ../tests/desktop/entry.mjs"
   },
   "devDependencies": {
@@ -38,6 +39,32 @@
         "NSScreenCaptureUsageDescription": "Screen Select reads the part of the screen you select."
       },
       "hardenedRuntime": false
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "bin/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Screen-Select-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Screen-Select-${version}-portable.${ext}"
     },
     "extraResources": [
       {
