@@ -65,6 +65,11 @@ try {
     { timeout: 15000 },
   );
   const sw = await swTarget.worker();
+  // The worker can be found a moment before its extension APIs are ready.
+  for (let tries = 0; !(await sw.evaluate(() => typeof chrome !== 'undefined' && Boolean(chrome.storage))); tries += 1) {
+    if (tries === 50) throw new Error('The extension never finished starting.');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
   await sw.evaluate(() => chrome.storage.sync.set({ lookChosen: true }));
 
   await check('reads the video frame fixture', async () => {
@@ -330,6 +335,20 @@ try {
     assert.match(text, /Plan\tPrice\tUsers/);
     assert.match(text, /Team\t12\t10/);
     assert.match(await status(), /Found a table: 3 rows, 3 columns/);
+    const original = await inShadow((root) => ({
+      cells: [...root.querySelectorAll('.source table tr')].map((row) => [...row.cells].map((cell) => cell.textContent)),
+      textHidden: root.querySelector('.text').hidden,
+      button: root.querySelector('.edit-text').textContent,
+    }));
+    assert.deepEqual(original, {
+      cells: [['Plan', 'Price', 'Users'], ['Free', '0', '1'], ['Team', '12', '10']],
+      textHidden: true,
+      button: 'Edit as text',
+    });
+    await inShadow((root) => root.querySelector('.edit-text').click());
+    assert.equal(await inShadow((root) => root.querySelector('.text').hidden), false, 'Edit as text shows the text');
+    await inShadow((root) => root.querySelector('.edit-text').click());
+    assert.equal(await inShadow((root) => root.querySelector('.source').hidden), false, 'Show as table goes back');
     // Google's free service turns tests away at times, so it answers line by line here.
     await sw.evaluate(() => {
       globalThis.__realFetch = globalThis.fetch;
@@ -884,8 +903,13 @@ try {
     await options.goto(`chrome-extension://${new URL(sw.url()).host}/options.html`);
     assert.equal(await options.$eval('input[value="nvidia"]', (radio) => radio.checked), true);
     await options.type('#nvidia-key', 'test-key');
+    assert.match(await options.$eval('#nvidia-key-state', (el) => el.textContent), /No key saved yet/);
     await options.click('#save-nvidia-key');
     await new Promise((resolve) => setTimeout(resolve, 300));
+    const state = await options.$eval('#nvidia-key-state', (el) => ({ saved: el.classList.contains('saved'), text: el.textContent }));
+    assert.equal(state.saved, true);
+    assert.match(state.text, /Key saved\. It's ready to use\./);
+    assert.doesNotMatch(state.text, /test-key/, 'the key itself is never shown');
     assert.equal(await sw.evaluate(async () => (await chrome.storage.local.get('nvidiaKey')).nvidiaKey), 'test-key');
     assert.equal(await sw.evaluate(async () => (await chrome.storage.sync.get('nvidiaKey')).nvidiaKey), undefined);
     await options.close();

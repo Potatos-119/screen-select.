@@ -36,9 +36,9 @@ Search opens your text in Google's AI Mode, so you get an answer and not just a 
 
 The text in the panel is real text. If it misread a word you can just fix it, and you can select part of it and right-click like anywhere else.
 
-Translate uses your free NVIDIA or Gemini key if you've saved one, because AI understands context and technical terms better. Without a key, or if that fails, it uses Google, and the panel tells you which one answered.
+Translate uses AI because it understands context and technical terms better. You don't need a key: without one it uses a free shared NVIDIA service I run. Your own NVIDIA or Gemini key is used first if you've saved one. Without a key, or if that fails, it uses Google, and the panel tells you which one answered.
 
-Select a table and it knows it's a table. The panel says how many rows and columns it found, Copy pastes it into Sheets or Excel with every cell in its place, and Translate gives you the table back translated cell by cell. Numbers stay as they are, and an Arabic table reads from the right.
+Select a table and it knows it's a table. The panel shows it as a table and says how many rows and columns it found. **Edit as text** lets you fix a misread cell. Copy pastes it into Sheets or Excel with every cell in its place, and Translate gives you the table back translated cell by cell. Numbers stay as they are, and an Arabic table reads from the right.
 
 It works out the direction by itself. Arabic goes to English and everything else goes to Arabic. If you grab Arabic and English together by mistake, it asks which one you want.
 
@@ -46,7 +46,7 @@ Got a word you always want translated your way? Add it to your glossary in Exten
 
 ## Brief
 
-Brief explains what you selected in a few sentences, right there in the panel. The words appear as they're written. Want something specific? Type a question in the box above the buttons and press Enter or Brief. You can keep asking follow-up questions, and it remembers the conversation until you select something new. Press Brief with an empty box to start over. It needs an API key, and you pick the service under Details, then Extension options.
+Brief explains what you selected in a few sentences, right there in the panel. The words appear as they're written. Want something specific? Type a question in the box above the buttons and press Enter or Brief. You can keep asking follow-up questions, and it remembers the conversation until you select something new. Press Brief with an empty box to start over. It works without a key through the free shared NVIDIA service. If that's busy, or you want Gemini or Claude, add your own key and pick the service under Details, then Extension options.
 
 | Option | Cost |
 |---|---|
@@ -60,7 +60,7 @@ To set up the free one:
 
 1. Make an account at [build.nvidia.com](https://build.nvidia.com) and generate an API key.
 2. Open the extension's Details page, then Extension options.
-3. Paste the key under **Your NVIDIA API key** and click **Save NVIDIA key**.
+3. Paste the key under **Your NVIDIA API key** and click **Save NVIDIA key**. A green tick shows the key is saved, and **Remove** deletes it.
 
 Gemini is a good backup. If you save both free keys and one can't answer, the other one takes over by itself and the panel tells you. Get a free key at [aistudio.google.com](https://aistudio.google.com), save it under **Your Gemini API key**, and pick Google Gemini under **Brief uses**. On the free plan Google may use what you send to improve its products, so don't select anything private.
 
@@ -101,7 +101,7 @@ Extension options is also where you switch Ask between Claude and ChatGPT.
 
 ## Privacy
 
-Search sends the panel text to Google. Translate sends it to NVIDIA or Gemini if you've saved a key, and to Google Translate if you haven't. Brief sends your selection, picture included, to the service you picked. All of that happens only when you press the button, and everything else stays on your computer.
+Search sends the panel text to Google. Translate sends it to NVIDIA or Gemini with your own key if you've saved one, and otherwise to NVIDIA through the free shared service (a Cloudflare Worker that adds my key and keeps nothing), then Google Translate if that fails. Brief without a key works the same way. Brief sends your selection, picture included, to the service you picked. All of that happens only when you press the button, and everything else stays on your computer.
 
 ## Fonts
 
@@ -117,5 +117,7 @@ npm run e2e
 ```
 
 `npm run e2e` drives Brave. `npm run e2e:chrome` and `npm run e2e:edge` use those browsers, or set `BROWSER_PATH` to any other one.
+
+The free shared service lives in `proxy/`. Its README says how to deploy it with your own NVIDIA key, which stays a Cloudflare secret.
 
 `npm run package` makes `dist/screen-select-<version>.zip`, ready to upload to the Chrome Web Store or Edge Add-ons. Both stores are free to publish on.

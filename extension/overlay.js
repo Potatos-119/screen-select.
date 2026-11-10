@@ -108,7 +108,8 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       font: 500 13px/1.3 var(--ui-font); box-shadow: var(--panel-shadow); pointer-events: none;
       backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
     }
-    .hint[hidden], .box[hidden], .size[hidden], .panel[hidden], .choices[hidden] { display: none; }
+    .hint[hidden], .box[hidden], .size[hidden], .panel[hidden], .choices[hidden],
+    .text[hidden], .source[hidden], .edit-text[hidden] { display: none; }
     .box { position: fixed; pointer-events: none; border: 2px solid var(--accent); border-radius: 2px; }
     .box.ready { pointer-events: auto; cursor: move; touch-action: none; }
     .handle {
@@ -162,7 +163,13 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       max-height: 28vh; overflow: auto; padding: 8px 10px; border-radius: var(--control-radius);
       white-space: pre-wrap; user-select: text;
     }
-    .translation { background: var(--well); }
+    .translation, .source { background: var(--well); }
+    .source { max-height: 32vh; overflow: auto; padding: 8px 10px; border-radius: var(--control-radius); user-select: text; }
+    .edit-text {
+      justify-self: start; margin-top: -6px; padding: 0; border: 0; background: none; color: var(--accent);
+      cursor: pointer; font: 500 12px/1.3 var(--ui-font);
+    }
+    .edit-text:hover { text-decoration: underline; }
     .text { tab-size: 4; }
     .sheet { width: 100%; border-collapse: collapse; white-space: normal; }
     .sheet td { padding: 4px 8px; border: 1px solid var(--line); vertical-align: top; }
@@ -384,6 +391,8 @@ globalThis.__screenSelectStart = async (dataUrl) => {
       </div>
       <canvas class="photo" title="Drag to move"></canvas>
       <textarea class="text" dir="auto" spellcheck="false" aria-label="Text from your selection"></textarea>
+      <div class="source" hidden></div>
+      <button class="edit-text" type="button" hidden></button>
       <div class="translation" dir="auto"></div>
       <div class="brief" dir="auto"></div>
       <div class="actions choices" hidden></div>
@@ -430,6 +439,8 @@ globalThis.__screenSelectStart = async (dataUrl) => {
   const panel = root.querySelector('.panel');
   const textArea = root.querySelector('.text');
   const translation = root.querySelector('.translation');
+  const source = root.querySelector('.source');
+  const editText = root.querySelector('.edit-text');
   const brief = root.querySelector('.brief');
   const choices = root.querySelector('.choices');
   const questionForm = root.querySelector('.question-form');
@@ -608,6 +619,8 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     panel.dataset.state = 'reading';
     textArea.value = '';
     textArea.style.height = '';
+    setTableView(false);
+    editText.hidden = true;
     translation.textContent = '';
     translatedText = '';
     brief.textContent = '';
@@ -638,6 +651,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
           : '',
       );
       startHistoryEntry(result.text);
+      if (result.table && showSource()) return;
       fitTextBox();
       // Focus puts the cursor at the end, which would scroll long text out of view.
       textArea.setSelectionRange(0, 0);
@@ -794,7 +808,53 @@ globalThis.__screenSelectStart = async (dataUrl) => {
     choices.hidden = false;
   }
 
+  // Same rules as textToParts in lib/table.js, which this classic script can't import.
+  function tableParts(text) {
+    const lines = text.split('\n');
+    if (lines.filter((line) => line.includes('\t')).length < 2) return null;
+    const columns = Math.max(...lines.map((line) => line.split('\t').length));
+    return lines.map((line) => {
+      if (!line.includes('\t')) return { type: 'line', text: line };
+      const cells = line.split('\t').map((cell) => cell.trim());
+      return { type: 'row', cells: [...cells, ...Array(columns - cells.length).fill('')] };
+    });
+  }
+
+  function setTableView(on) {
+    source.hidden = !on;
+    textArea.hidden = on;
+    editText.hidden = false;
+    editText.textContent = on ? 'Edit as text' : 'Show as table';
+    if (!on) fitTextBox();
+  }
+
+  // The original table shows as a table. Its text, with tabs between cells, stays editable.
+  function showSource() {
+    const parts = tableParts(textArea.value);
+    if (!parts) {
+      setTableView(false);
+      editText.hidden = true;
+      return false;
+    }
+    source.replaceChildren(...buildSheet(parts));
+    setTableView(true);
+    return true;
+  }
+
+  editText.addEventListener('click', () => {
+    if (source.hidden) {
+      showSource();
+      return;
+    }
+    setTableView(false);
+    textArea.focus();
+  });
+
   function showTable(parts) {
+    translation.replaceChildren(...buildSheet(parts));
+  }
+
+  function buildSheet(parts) {
     const nodes = [];
     let table = null;
     for (const part of parts) {
@@ -828,7 +888,7 @@ globalThis.__screenSelectStart = async (dataUrl) => {
         const arabic = node.textContent.match(/\p{Script=Arabic}/gu)?.length ?? 0;
         node.dir = arabic > letters / 2 ? 'rtl' : 'ltr';
       });
-    translation.replaceChildren(...nodes);
+    return nodes;
   }
 
   async function translateText(target) {

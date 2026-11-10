@@ -4,6 +4,9 @@ const CLAUDE_FALLBACK_BETA = 'server-side-fallback-2026-07-01';
 const NVIDIA_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 const MAX_TOKENS = 2000;
+// The owner's Cloudflare Worker in proxy/, which lends NVIDIA to people with no key of their own.
+// Empty until it is deployed.
+export const SHARED_AI_URL = '';
 // Stays under the 30 seconds a browser lets a service worker wait for a reply.
 export const BRIEF_TIMEOUT_MS = 25000;
 export const BRIEF_ATTEMPT_MS = 12000;
@@ -81,6 +84,11 @@ function modelFor(model) {
   return MODELS[model] ?? MODELS[DEFAULT_MODEL];
 }
 
+// With no NVIDIA key saved, NVIDIA requests go through the shared free AI instead.
+export function usesSharedAi(model, apiKey, sharedUrl = SHARED_AI_URL) {
+  return !apiKey && Boolean(sharedUrl) && modelFor(model) === MODELS.nvidia;
+}
+
 export function keyNameFor(model) {
   return modelFor(model).keyName;
 }
@@ -89,7 +97,8 @@ export function providerFor(model) {
   return modelFor(model).provider;
 }
 
-function chatRequest(apiKey, model, messages, stream) {
+function chatRequest(apiKey, model, messages, stream, sharedUrl = SHARED_AI_URL) {
+  const shared = usesSharedAi(model, apiKey, sharedUrl);
   const body = {
     model: modelFor(model).id,
     max_tokens: MAX_TOKENS,
@@ -98,20 +107,20 @@ function chatRequest(apiKey, model, messages, stream) {
     messages,
   };
   return {
-    url: modelFor(model).url,
+    url: shared ? sharedUrl : modelFor(model).url,
     init: {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         accept: 'application/json',
-        authorization: `Bearer ${apiKey}`,
+        ...(shared ? {} : { authorization: `Bearer ${apiKey}` }),
       },
       body: JSON.stringify(body),
     },
   };
 }
 
-function buildChatRequest({ apiKey, model, imageDataUrl, ...request }) {
+function buildChatRequest({ apiKey, model, imageDataUrl, sharedUrl, ...request }) {
   const [first, ...rest] = conversation(request);
   return chatRequest(
     apiKey,
@@ -128,6 +137,7 @@ function buildChatRequest({ apiKey, model, imageDataUrl, ...request }) {
       ...rest.map(({ role, text }) => ({ role, content: text })),
     ],
     true,
+    sharedUrl,
   );
 }
 
@@ -139,7 +149,7 @@ export function backupFor(model) {
   return FREE_MODELS.includes(chosen) ? FREE_MODELS.find((other) => other !== chosen) : null;
 }
 
-export function buildTranslationRequest({ apiKey, model, text, target, glossary = [], table = false }) {
+export function buildTranslationRequest({ apiKey, model, text, target, glossary = [], table = false, sharedUrl }) {
   return chatRequest(
     apiKey,
     model,
@@ -148,6 +158,7 @@ export function buildTranslationRequest({ apiKey, model, text, target, glossary 
       { role: 'user', content: `<text>\n${text}\n</text>` },
     ],
     false,
+    sharedUrl,
   );
 }
 
@@ -218,8 +229,12 @@ export function describeBriefTimeout(model) {
   return `${providerFor(model)} took too long to answer. Try again, or choose another option in the extension settings.`;
 }
 
-export function describeBriefError(status, json, model) {
+export function describeBriefError(status, json, model, shared = false) {
   const { provider } = modelFor(model);
+  if (shared) {
+    if (status === 429) return 'The free AI is busy. Wait a minute, or add your own free NVIDIA key in the extension settings.';
+    return json?.error?.message ?? `The free AI returned an error (${status}). Try again.`;
+  }
   if (status === 401 || status === 403) {
     return `${provider} rejected your API key. Check it in the extension settings.`;
   }

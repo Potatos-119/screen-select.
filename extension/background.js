@@ -12,6 +12,7 @@ import {
   streamText,
   providerFor,
   FREE_MODELS,
+  usesSharedAi,
 } from './lib/brief.js';
 import { applyGlossary, matchGlossary, parseGlossary } from './lib/glossary.js';
 import { saveEntry } from './lib/history.js';
@@ -60,7 +61,7 @@ async function recognize(dataUrl) {
 
 async function translateWith(model, text, target, glossary, table) {
   const apiKey = await readKey(model);
-  if (!apiKey) return null;
+  if (!apiKey && !usesSharedAi(model, apiKey)) return null;
   try {
     const { url, init } = buildTranslationRequest({ apiKey, model, text, target, glossary, table });
     const response = await fetch(url, { ...init, signal: AbortSignal.timeout(AI_TRANSLATE_TIMEOUT_MS) });
@@ -154,7 +155,7 @@ async function streamModel({ model, apiKey, request, timeout, onText, stop }) {
     const response = await fetch(url, { ...init, signal: AbortSignal.any([timer.signal, stop]) });
     if (!response.ok) {
       const json = await response.json().catch(() => null);
-      return { error: describeBriefError(response.status, json, model) };
+      return { error: describeBriefError(response.status, json, model, usesSharedAi(model, apiKey)) };
     }
 
     const feed = createSseReader((event) => write(streamText(event, model)));
@@ -186,7 +187,7 @@ async function streamModel({ model, apiKey, request, timeout, onText, stop }) {
 async function brief({ text, question, turns, imageDataUrl }, onText, stop) {
   const { briefModel } = await chrome.storage.sync.get('briefModel');
   const apiKey = await readKey(briefModel);
-  if (!apiKey) {
+  if (!apiKey && !usesSharedAi(briefModel, apiKey)) {
     return { noKey: true, provider: providerFor(briefModel), requestText: text ? briefRequestText(text, question) : '' };
   }
 
@@ -194,7 +195,8 @@ async function brief({ text, question, turns, imageDataUrl }, onText, stop) {
   const shared = { request, onText, stop };
   const backup = backupFor(briefModel);
   const backupKey = backup && (await readKey(backup));
-  if (!backupKey) return streamModel({ ...shared, model: briefModel, apiKey, timeout: BRIEF_TIMEOUT_MS });
+  const backupReady = backup && (backupKey || usesSharedAi(backup, backupKey));
+  if (!backupReady) return streamModel({ ...shared, model: briefModel, apiKey, timeout: BRIEF_TIMEOUT_MS });
 
   const first = await streamModel({ ...shared, model: briefModel, apiKey, timeout: BRIEF_ATTEMPT_MS });
   if (!first.error || first.partial || stop.aborted) return first;

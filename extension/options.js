@@ -14,15 +14,27 @@ radios.forEach((radio) => {
 
 const modelRadios = document.querySelectorAll('input[name="briefModel"]');
 
-function wireKey({ inputId, buttonId, statusId, storageKey }) {
+// Only the last four characters are shown, which is enough to tell keys apart.
+function keyEnding(key) {
+  return key.length > 8 ? key.slice(-4) : '';
+}
+
+function wireKey({ inputId, buttonId, statusId, stateId, storageKey }) {
   const input = document.getElementById(inputId);
   const status = document.getElementById(statusId);
-  const showState = (hasKey) => {
+  const state = document.getElementById(stateId);
+  const fieldset = input.closest('fieldset');
+  const showState = (key) => {
     input.value = '';
-    input.placeholder = hasKey ? 'A key is saved. Paste a new one to replace it.' : 'Paste your API key';
+    input.placeholder = key ? 'Paste a new key here to replace it.' : 'Paste your API key';
+    state.classList.toggle('saved', Boolean(key));
+    const ending = key && keyEnding(key);
+    state.querySelector('span').textContent = key
+      ? `Key saved${ending ? `, ending in ${ending}` : ''}. It's ready to use.`
+      : 'No key saved yet.';
   };
 
-  chrome.storage.local.get(storageKey).then((saved) => showState(Boolean(saved[storageKey])));
+  chrome.storage.local.get(storageKey).then((saved) => showState(saved[storageKey] ?? ''));
 
   document.getElementById(buttonId).addEventListener('click', async () => {
     const value = input.value.trim();
@@ -31,14 +43,23 @@ function wireKey({ inputId, buttonId, statusId, storageKey }) {
       return;
     }
     await chrome.storage.local.set({ [storageKey]: value });
-    showState(true);
+    showState(value);
     status.textContent = 'Saved.';
+    fieldset.classList.remove('just-saved');
+    void fieldset.offsetWidth;
+    fieldset.classList.add('just-saved');
+  });
+
+  state.querySelector('button').addEventListener('click', async () => {
+    await chrome.storage.local.remove(storageKey);
+    showState('');
+    status.textContent = 'Removed.';
   });
 }
 
-wireKey({ inputId: 'nvidia-key', buttonId: 'save-nvidia-key', statusId: 'nvidia-key-status', storageKey: 'nvidiaKey' });
-wireKey({ inputId: 'gemini-key', buttonId: 'save-gemini-key', statusId: 'gemini-key-status', storageKey: 'geminiKey' });
-wireKey({ inputId: 'api-key', buttonId: 'save-key', statusId: 'key-status', storageKey: 'apiKey' });
+wireKey({ inputId: 'nvidia-key', buttonId: 'save-nvidia-key', statusId: 'nvidia-key-status', stateId: 'nvidia-key-state', storageKey: 'nvidiaKey' });
+wireKey({ inputId: 'gemini-key', buttonId: 'save-gemini-key', statusId: 'gemini-key-status', stateId: 'gemini-key-state', storageKey: 'geminiKey' });
+wireKey({ inputId: 'api-key', buttonId: 'save-key', statusId: 'key-status', stateId: 'key-state', storageKey: 'apiKey' });
 
 chrome.storage.sync.get({ briefModel: 'nvidia' }).then(({ briefModel }) => {
   // A choice saved before an option was removed falls back to the default.
