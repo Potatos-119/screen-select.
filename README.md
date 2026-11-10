@@ -99,6 +99,18 @@ Extension options is also where you switch Ask between Claude and ChatGPT.
 - Copy image needs an `https` page.
 - A video embedded from another site may keep playing while you select.
 
+## The free shared AI
+
+It's there so you can try Translate and Brief without signing up for anything, but it isn't the best way to use them.
+
+- Everyone shares one set of free NVIDIA credits. When they run out, it stops until I add more, and the panel says the free AI isn't available.
+- Each person gets 10 requests a minute and everyone together gets 120, so at busy times you may have to wait a minute.
+- It only runs NVIDIA Nemotron, with no choice of model.
+- Your text goes through my Cloudflare Worker on its way to NVIDIA. The Worker doesn't save it, but it's one more step than going straight to NVIDIA.
+- I can turn it off at any time.
+
+For steady use, make your own free key at [build.nvidia.com](https://build.nvidia.com) or [aistudio.google.com](https://aistudio.google.com) and save it in Extension options. Your own key always comes first.
+
 ## Privacy
 
 Search sends the panel text to Google. Translate sends it to NVIDIA or Gemini with your own key if you've saved one, and otherwise to NVIDIA through the free shared service (a Cloudflare Worker that adds my key and keeps nothing), then Google Translate if that fails. Brief without a key works the same way. Brief sends your selection, picture included, to the service you picked. All of that happens only when you press the button, and everything else stays on your computer.
@@ -120,4 +132,4 @@ npm run e2e
 
 The free shared service lives in `proxy/`. Its README says how to deploy it with your own NVIDIA key, which stays a Cloudflare secret.
 
-`npm run package` makes `dist/screen-select-<version>.zip`, ready to upload to the Chrome Web Store or Edge Add-ons. Both stores are free to publish on.
+`npm run package` makes `dist/screen-select-<version>.zip`, ready to upload to the Chrome Web Store or Edge Add-ons. Edge Add-ons is free to publish on. The Chrome Web Store asks for a one-time $5 developer fee, and Brave installs from there too.
