@@ -1,6 +1,9 @@
 name = "screen-select-ai"
 main = "worker.js"
 compatibility_date = "2026-10-01"
+workers_dev = true
+# Each upload would otherwise get its own extra public address.
+preview_urls = false
 
 # Each person (by IP address) gets 10 requests a minute.
 [[ratelimits]]

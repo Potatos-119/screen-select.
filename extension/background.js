@@ -59,9 +59,7 @@ async function recognize(dataUrl) {
   return chrome.runtime.sendMessage({ target: 'offscreen', type: 'recognize', dataUrl });
 }
 
-async function translateWith(model, text, target, glossary, table) {
-  const apiKey = await readKey(model);
-  if (!apiKey && !usesSharedAi(model, apiKey)) return null;
+async function translateWith(model, apiKey, text, target, glossary, table) {
   try {
     const { url, init } = buildTranslationRequest({ apiKey, model, text, target, glossary, table });
     const response = await fetch(url, { ...init, signal: AbortSignal.timeout(AI_TRANSLATE_TIMEOUT_MS) });
@@ -72,12 +70,15 @@ async function translateWith(model, text, target, glossary, table) {
   }
 }
 
+// Your own keys come first, and the shared free AI is the last try before Google.
 async function translateWithAi(text, target, glossary, table) {
   for (const model of FREE_MODELS) {
-    const translation = await translateWith(model, text, target, glossary, table);
+    const apiKey = await readKey(model);
+    const translation = apiKey && (await translateWith(model, apiKey, text, target, glossary, table));
     if (translation) return translation;
   }
-  return null;
+  if (!usesSharedAi('nvidia', '')) return null;
+  return translateWith('nvidia', '', text, target, glossary, table);
 }
 
 async function translateWithGoogle(text, target, source, glossary) {

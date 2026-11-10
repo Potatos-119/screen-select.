@@ -26,7 +26,8 @@ It asks for the key in the Terminal. Paste it there, never in a chat or a file.
 npx wrangler deploy
 ```
 
-It prints an address like `https://screen-select-ai.<you>.workers.dev`. Put that address, followed by
+It prints an address like `https://screen-select-ai.<you>.workers.dev`. This project's own one is
+`https://screen-select-ai.screenselect.workers.dev`. Put that address, followed by
 `/v1/chat/completions`, in `SHARED_AI_URL` at the top of `extension/lib/brief.js`.
 
 Once the extension has a fixed ID (after it's published in a store), you can lock the Worker to it:

@@ -15,7 +15,23 @@ console.log(`browser: ${BROWSER}`);
 
 const SOURCE = process.env.EXT_DIR ?? 'extension';
 
+// Stands in for the shared AI Worker, so tests never spend the real NVIDIA credits.
+// It refuses by default, which leaves Translate and Brief to fall back as they would with it down.
+const sharedAi = { reply: null, requests: [] };
+
 const server = createServer((req, res) => {
+  if (req.url === '/v1/chat/completions') {
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk;
+    });
+    req.on('end', () => {
+      sharedAi.requests.push({ headers: req.headers, body: JSON.parse(body) });
+      res.writeHead(sharedAi.reply ? 200 : 503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(sharedAi.reply ?? { error: { message: 'The free AI is off in tests.' } }));
+    });
+    return;
+  }
   if (req.url === '/page.pdf') {
     res.writeHead(200, { 'Content-Type': 'application/pdf' });
     res.end(readFileSync('tests/fixtures/page.pdf'));
@@ -37,6 +53,11 @@ cpSync(SOURCE, extDir, { recursive: true });
 const manifest = JSON.parse(readFileSync(join(extDir, 'manifest.json')));
 manifest.host_permissions = ['<all_urls>'];
 writeFileSync(join(extDir, 'manifest.json'), JSON.stringify(manifest));
+const briefFile = join(extDir, 'lib/brief.js');
+const briefSource = readFileSync(briefFile, 'utf8');
+const sharedLine = /export const SHARED_AI_URL = '[^']*';/;
+assert.match(briefSource, sharedLine);
+writeFileSync(briefFile, briefSource.replace(sharedLine, `export const SHARED_AI_URL = '${PAGE_URL}v1/chat/completions';`));
 
 const browser = await puppeteer.launch({
   executablePath: BROWSER,
@@ -805,9 +826,33 @@ try {
     );
   const clearKey = () => sw.evaluate(() => chrome.storage.local.remove(['apiKey', 'nvidiaKey', 'geminiKey']));
 
-  await check('Brief without a key asks first and opens nothing', async () => {
+  await check('Brief with no key uses the free shared AI', async () => {
     await clearKey();
     await sw.evaluate(() => chrome.storage.sync.remove(['askTarget', 'briefModel']));
+    sharedAi.requests = [];
+    sharedAi.reply = { choices: [{ message: { content: 'A brief from the shared AI.' } }] };
+    await reset();
+    await activate();
+    await drag('#english');
+    await panelText();
+    await clickButton('brief');
+    await page.waitForFunction(
+      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.brief').textContent.includes('shared AI'),
+      { timeout: 10000 },
+    );
+    sharedAi.reply = null;
+    const [request] = sharedAi.requests;
+    assert.match(request.headers.origin, /^chrome-extension:\/\//);
+    assert.equal(request.headers.authorization, undefined, 'no key is sent from the extension');
+    assert.equal(request.body.stream, true);
+    await page.keyboard.press('Escape');
+  });
+
+  await check('Brief without a key asks first and opens nothing', async () => {
+    await clearKey();
+    // Claude has no shared option, so it still needs a key of your own.
+    await sw.evaluate(() => chrome.storage.sync.remove('askTarget'));
+    await sw.evaluate(() => chrome.storage.sync.set({ briefModel: 'haiku' }));
     await reset();
     await activate();
     await drag('#english');
@@ -818,7 +863,7 @@ try {
       () => !document.querySelector('#screen-select-host').shadowRoot.querySelector('.choices').hidden,
       { timeout: 5000 },
     );
-    assert.match(await inShadow((root) => root.querySelector('.choices').textContent), /no NVIDIA key is saved/);
+    assert.match(await inShadow((root) => root.querySelector('.choices').textContent), /no Claude key is saved/);
     if (process.env.CHOICE_SHOT) await page.screenshot({ path: process.env.CHOICE_SHOT });
     await new Promise((resolve) => setTimeout(resolve, 500));
     assert.equal((await browser.pages()).length, tabsBefore);

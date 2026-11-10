@@ -5,8 +5,7 @@ const NVIDIA_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 const MAX_TOKENS = 2000;
 // The owner's Cloudflare Worker in proxy/, which lends NVIDIA to people with no key of their own.
-// Empty until it is deployed.
-export const SHARED_AI_URL = '';
+export const SHARED_AI_URL = 'https://screen-select-ai.screenselect.workers.dev/v1/chat/completions';
 // Stays under the 30 seconds a browser lets a service worker wait for a reply.
 export const BRIEF_TIMEOUT_MS = 25000;
 export const BRIEF_ATTEMPT_MS = 12000;
