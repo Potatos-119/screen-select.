@@ -4,7 +4,7 @@ I got tired of pausing a video, taking a screenshot and pasting it into a chat j
 
 Press a shortcut, drag a box over anything in the tab, even a video, and you get the text. Then you can copy it, translate it, search it or ask AI about it.
 
-It's made for Chrome and Brave.
+It's made for Chrome, Edge and Brave.
 
 ## Install
 
@@ -16,6 +16,8 @@ It isn't on the Chrome Web Store, so you load it yourself. It only takes a minut
 4. Click **Load unpacked** and pick the `extension` folder inside.
 5. Click the puzzle icon in the toolbar and pin Screen Select, if you want it close by.
 
+In Microsoft Edge, open `edge://extensions` instead, turn on **Developer mode** (on the left, or at the bottom of the left menu) and click **Load unpacked**. Pin it from the puzzle icon the same way.
+
 The browser reads the extension from that folder every time it starts, so if you delete the folder it stops working.
 
 To update, download it again, replace the folder, and press the reload icon on Screen Select in `chrome://extensions`.
@@ -26,13 +28,17 @@ To update, download it again, replace the folder, and press the reload icon on S
 2. Drag a box over what you want. `Esc` cancels.
 3. Pick something in the panel: Copy, Copy image, Translate, Brief, Search, Ask, Read or History.
 
-It works on web pages, videos and PDFs open in the browser. Read speaks the answer, the translation or the text, and pressing it again stops it. Arabic needs an Arabic voice installed on your computer.
+Missed a bit? Drag inside the box to move it, or drag one of its dots to make it bigger or smaller, and it reads the new area. The panel moves too: drag it by its title bar (or by the photo in the Print look) to see what's under it, and it stays where you put it until you draw a new box.
+
+It works on web pages, videos and PDFs open in the browser. Read speaks the answer, the translation or the text, and pressing it again stops it. Arabic needs an Arabic voice installed on your computer. Edge comes with natural-sounding voices for both, and Read picks those first.
 
 Search opens your text in Google's AI Mode, so you get an answer and not just a list of links.
 
 The text in the panel is real text. If it misread a word you can just fix it, and you can select part of it and right-click like anywhere else.
 
-Translate uses your free NVIDIA or Gemini key if you've saved one, because AI understands context and technical terms better. Without a key, or if that fails, it uses Google, and the panel tells you which one answered.
+Translate uses AI because it understands context and technical terms better. You don't need a key: without one it uses a free shared NVIDIA service I run. Your own NVIDIA or Gemini key is used first if you've saved one. Without a key, or if that fails, it uses Google, and the panel tells you which one answered.
+
+Select a table and it knows it's a table. The panel shows it as a table and says how many rows and columns it found. **Edit as text** lets you fix a misread cell. Copy pastes it into Sheets or Excel with every cell in its place, and Translate gives you the table back translated cell by cell. Numbers stay as they are, and an Arabic table reads from the right.
 
 It works out the direction by itself. Arabic goes to English and everything else goes to Arabic. If you grab Arabic and English together by mistake, it asks which one you want.
 
@@ -40,7 +46,7 @@ Got a word you always want translated your way? Add it to your glossary in Exten
 
 ## Brief
 
-Brief explains what you selected in a few sentences, right there in the panel. The words appear as they're written. Want something specific? Type a question in the box above the buttons and press Enter or Brief. You can keep asking follow-up questions, and it remembers the conversation until you select something new. Press Brief with an empty box to start over. It needs an API key, and you pick the service under Details, then Extension options.
+Brief explains what you selected in a few sentences, right there in the panel. The words appear as they're written. Want something specific? Type a question in the box above the buttons and press Enter or Brief. You can keep asking follow-up questions, and it remembers the conversation until you select something new. Press Brief with an empty box to start over. It works without a key through the free shared NVIDIA service. If that's busy, or you want Gemini or Claude, add your own key and pick the service under Details, then Extension options.
 
 | Option | Cost |
 |---|---|
@@ -54,7 +60,7 @@ To set up the free one:
 
 1. Make an account at [build.nvidia.com](https://build.nvidia.com) and generate an API key.
 2. Open the extension's Details page, then Extension options.
-3. Paste the key under **Your NVIDIA API key** and click **Save NVIDIA key**.
+3. Paste the key under **Your NVIDIA API key** and click **Save NVIDIA key**. A green tick shows the key is saved, and **Remove** deletes it.
 
 Gemini is a good backup. If you save both free keys and one can't answer, the other one takes over by itself and the panel tells you. Get a free key at [aistudio.google.com](https://aistudio.google.com), save it under **Your Gemini API key**, and pick Google Gemini under **Brief uses**. On the free plan Google may use what you send to improve its products, so don't select anything private.
 
@@ -76,7 +82,7 @@ The first three follow your light or dark mode. They use the real system fonts i
 
 ## Settings
 
-You can change the shortcut at `chrome://extensions/shortcuts`. If `Alt+Shift+S` does nothing, another extension probably took it, so set a new one there.
+You can change the shortcut at `chrome://extensions/shortcuts` (`edge://extensions/shortcuts` in Edge). If `Alt+Shift+S` does nothing, another extension probably took it, so set a new one there.
 
 Extension options is also where you switch Ask between Claude and ChatGPT.
 
@@ -106,18 +112,31 @@ Keys are encrypted in your Mac's Keychain, and your settings and history stay on
 ## What it can't do
 
 - Netflix and other protected sites show up as a black picture, so there's nothing to read.
-- Browsers don't let extensions run on their own pages or the Chrome Web Store. The icon shows `!` there.
+- Browsers don't let extensions run on their own pages, the Chrome Web Store or Edge Add-ons. The icon shows `!` there.
 - The extension only works inside the browser. For other apps, use the desktop app.
 - For a PDF saved on your computer, turn on **Allow access to file URLs** on the extension's Details page.
 - Blurry, tiny or fancy text can come out wrong, and Arabic more often than English.
+- Tables need their columns to line up. Cells that join across columns, or a table with no space between columns, can come out as plain text.
 - Lines and arrows in diagrams get cleaned out of the text, but a stray mark can still get through.
 - Capital I and small l look the same in a lot of fonts. It fixes "Al" to "AI" most of the time, but a title like "Al Revolution" can slip through.
 - Copy image needs an `https` page.
 - A video embedded from another site may keep playing while you select.
 
+## The free shared AI
+
+It's there so you can try Translate and Brief without signing up for anything, but it isn't the best way to use them.
+
+- Everyone shares one set of free NVIDIA credits. When they run out, it stops until I add more, and the panel says the free AI isn't available.
+- Each person gets 10 requests a minute and everyone together gets 120, so at busy times you may have to wait a minute.
+- It only runs NVIDIA Nemotron, with no choice of model.
+- Your text goes through my Cloudflare Worker on its way to NVIDIA. The Worker doesn't save it, but it's one more step than going straight to NVIDIA.
+- I can turn it off at any time.
+
+For steady use, make your own free key at [build.nvidia.com](https://build.nvidia.com) or [aistudio.google.com](https://aistudio.google.com) and save it in Extension options. Your own key always comes first.
+
 ## Privacy
 
-Search sends the panel text to Google. Translate sends it to NVIDIA or Gemini if you've saved a key, and to Google Translate if you haven't. Brief sends your selection, picture included, to the service you picked. All of that happens only when you press the button, and everything else stays on your computer.
+Search sends the panel text to Google. Translate sends it to NVIDIA or Gemini with your own key if you've saved one, and otherwise to NVIDIA through the free shared service (a Cloudflare Worker that adds my key and keeps nothing), then Google Translate if that fails. Brief without a key works the same way. Brief sends your selection, picture included, to the service you picked. All of that happens only when you press the button, and everything else stays on your computer.
 
 ## Fonts
 
@@ -132,6 +151,10 @@ npm test
 npm run e2e
 ```
 
-`npm run e2e` drives Brave. To use another browser, set `BROWSER_PATH` to its executable.
+`npm run e2e` drives Brave. `npm run e2e:chrome` and `npm run e2e:edge` use those browsers, or set `BROWSER_PATH` to any other one.
 
 To test the desktop app, run `npm test` inside `desktop`. It uses a fake screen and fake AI services, and a window covers your screen for a moment.
+
+The free shared service lives in `proxy/`. Its README says how to deploy it with your own NVIDIA key, which stays a Cloudflare secret.
+
+`npm run package` makes `dist/screen-select-<version>.zip`, ready to upload to the Chrome Web Store or Edge Add-ons. Edge Add-ons is free to publish on. The Chrome Web Store asks for a one-time $5 developer fee, and Brave installs from there too.

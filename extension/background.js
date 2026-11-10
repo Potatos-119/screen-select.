@@ -12,10 +12,12 @@ import {
   streamText,
   providerFor,
   FREE_MODELS,
+  usesSharedAi,
 } from './lib/brief.js';
 import { applyGlossary, matchGlossary, parseGlossary } from './lib/glossary.js';
 import { saveEntry } from './lib/history.js';
 import { aiSearchUrl } from './lib/search.js';
+import { fillSegments, partsToText, segmentsOf, textToParts } from './lib/table.js';
 import { createSseReader } from './lib/stream.js';
 import {
   buildTranslateUrl,
@@ -57,11 +59,9 @@ async function recognize(dataUrl) {
   return chrome.runtime.sendMessage({ target: 'offscreen', type: 'recognize', dataUrl });
 }
 
-async function translateWith(model, text, target, glossary) {
-  const apiKey = await readKey(model);
-  if (!apiKey) return null;
+async function translateWith(model, apiKey, text, target, glossary, table) {
   try {
-    const { url, init } = buildTranslationRequest({ apiKey, model, text, target, glossary });
+    const { url, init } = buildTranslationRequest({ apiKey, model, text, target, glossary, table });
     const response = await fetch(url, { ...init, signal: AbortSignal.timeout(AI_TRANSLATE_TIMEOUT_MS) });
     if (!response.ok) return null;
     return parseBriefResponse(await response.json(), model);
@@ -70,31 +70,62 @@ async function translateWith(model, text, target, glossary) {
   }
 }
 
-async function translateWithAi(text, target, glossary) {
+// Your own keys come first, and the shared free AI is the last try before Google.
+async function translateWithAi(text, target, glossary, table) {
   for (const model of FREE_MODELS) {
-    const translation = await translateWith(model, text, target, glossary);
+    const apiKey = await readKey(model);
+    const translation = apiKey && (await translateWith(model, apiKey, text, target, glossary, table));
     if (translation) return translation;
   }
-  return null;
+  if (!usesSharedAi('nvidia', '')) return null;
+  return translateWith('nvidia', '', text, target, glossary, table);
 }
 
-async function translate(text, chosenTarget) {
-  if (!chosenTarget && hasTwoLanguages(text)) return { twoLanguages: true };
+async function translateWithGoogle(text, target, source, glossary) {
+  try {
+    const response = await fetch(buildTranslateUrl(applyGlossary(text, glossary), target, source));
+    if (!response.ok) return null;
+    return parseTranslateResponse(await response.json());
+  } catch {
+    return null;
+  }
+}
+
+async function translationSetup(text, chosenTarget) {
   const target = chosenTarget ?? targetLang(text);
   const { glossary: savedGlossary } = await chrome.storage.local.get('glossary');
   const glossary = matchGlossary(text, parseGlossary(savedGlossary), target);
   // Google leaves the words swapped in below alone once it's told the source language.
   const source = chosenTarget || glossary.length ? sourceLang(target) : 'auto';
-  const aiTranslation = await translateWithAi(text, target, glossary);
+  return { target, glossary, source };
+}
+
+// Each cell is one line, and the answer is used only if every line comes back.
+async function translateTable(parts, chosenTarget) {
+  const segments = segmentsOf(parts);
+  if (!segments.length) return null;
+  const text = segments.join('\n');
+  const { target, glossary, source } = await translationSetup(text, chosenTarget);
+  const fromAi = fillSegments(parts, await translateWithAi(text, target, glossary, true));
+  if (fromAi) return { table: fromAi, engine: 'AI' };
+  const fromGoogle = fillSegments(parts, await translateWithGoogle(text, target, source, glossary));
+  if (fromGoogle) return { table: fromGoogle, engine: 'Google' };
+  return null;
+}
+
+async function translate(text, chosenTarget) {
+  if (!chosenTarget && hasTwoLanguages(text)) return { twoLanguages: true };
+  const parts = textToParts(text);
+  const table = parts && (await translateTable(parts, chosenTarget));
+  if (table) return { ...table, translation: partsToText(table.table) };
+
+  const { target, glossary, source } = await translationSetup(text, chosenTarget);
+  const aiTranslation = await translateWithAi(text, target, glossary, false);
   if (aiTranslation) return { translation: aiTranslation, engine: 'AI' };
-  try {
-    const response = await fetch(buildTranslateUrl(applyGlossary(text, glossary), target, source));
-    if (!response.ok) throw new Error(`Translate returned ${response.status}`);
-    return { translation: parseTranslateResponse(await response.json()), engine: 'Google' };
-  } catch {
-    await chrome.tabs.create({ url: fallbackUrl(text, target, source) });
-    return { fallbackOpened: true };
-  }
+  const googleTranslation = await translateWithGoogle(text, target, source, glossary);
+  if (googleTranslation) return { translation: googleTranslation, engine: 'Google' };
+  await chrome.tabs.create({ url: fallbackUrl(text, target, source) });
+  return { fallbackOpened: true };
 }
 
 async function readKey(model) {
@@ -125,7 +156,7 @@ async function streamModel({ model, apiKey, request, timeout, onText, stop }) {
     const response = await fetch(url, { ...init, signal: AbortSignal.any([timer.signal, stop]) });
     if (!response.ok) {
       const json = await response.json().catch(() => null);
-      return { error: describeBriefError(response.status, json, model) };
+      return { error: describeBriefError(response.status, json, model, usesSharedAi(model, apiKey)) };
     }
 
     const feed = createSseReader((event) => write(streamText(event, model)));
@@ -157,7 +188,7 @@ async function streamModel({ model, apiKey, request, timeout, onText, stop }) {
 async function brief({ text, question, turns, imageDataUrl }, onText, stop) {
   const { briefModel } = await chrome.storage.sync.get('briefModel');
   const apiKey = await readKey(briefModel);
-  if (!apiKey) {
+  if (!apiKey && !usesSharedAi(briefModel, apiKey)) {
     return { noKey: true, provider: providerFor(briefModel), requestText: text ? briefRequestText(text, question) : '' };
   }
 
@@ -165,7 +196,8 @@ async function brief({ text, question, turns, imageDataUrl }, onText, stop) {
   const shared = { request, onText, stop };
   const backup = backupFor(briefModel);
   const backupKey = backup && (await readKey(backup));
-  if (!backupKey) return streamModel({ ...shared, model: briefModel, apiKey, timeout: BRIEF_TIMEOUT_MS });
+  const backupReady = backup && (backupKey || usesSharedAi(backup, backupKey));
+  if (!backupReady) return streamModel({ ...shared, model: briefModel, apiKey, timeout: BRIEF_TIMEOUT_MS });
 
   const first = await streamModel({ ...shared, model: briefModel, apiKey, timeout: BRIEF_ATTEMPT_MS });
   if (!first.error || first.partial || stop.aborted) return first;

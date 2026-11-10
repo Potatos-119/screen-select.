@@ -1,3 +1,7 @@
 node_modules/
 .DS_Store
 docs/superpowers/
+dist/
+.env
+.dev.vars
+proxy/.wrangler/

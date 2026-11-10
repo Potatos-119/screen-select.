@@ -5,11 +5,33 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import puppeteer from 'puppeteer-core';
 
-const BROWSER = process.env.BROWSER_PATH ?? '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser';
+const BROWSERS = {
+  brave: '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+  chrome: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  edge: '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+};
+const BROWSER = process.env.BROWSER_PATH ?? BROWSERS[process.env.BROWSER ?? 'brave'];
+console.log(`browser: ${BROWSER}`);
 
 const SOURCE = process.env.EXT_DIR ?? 'extension';
 
+// Stands in for the shared AI Worker, so tests never spend the real NVIDIA credits.
+// It refuses by default, which leaves Translate and Brief to fall back as they would with it down.
+const sharedAi = { reply: null, requests: [] };
+
 const server = createServer((req, res) => {
+  if (req.url === '/v1/chat/completions') {
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk;
+    });
+    req.on('end', () => {
+      sharedAi.requests.push({ headers: req.headers, body: JSON.parse(body) });
+      res.writeHead(sharedAi.reply ? 200 : 503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(sharedAi.reply ?? { error: { message: 'The free AI is off in tests.' } }));
+    });
+    return;
+  }
   if (req.url === '/page.pdf') {
     res.writeHead(200, { 'Content-Type': 'application/pdf' });
     res.end(readFileSync('tests/fixtures/page.pdf'));
@@ -31,6 +53,11 @@ cpSync(SOURCE, extDir, { recursive: true });
 const manifest = JSON.parse(readFileSync(join(extDir, 'manifest.json')));
 manifest.host_permissions = ['<all_urls>'];
 writeFileSync(join(extDir, 'manifest.json'), JSON.stringify(manifest));
+const briefFile = join(extDir, 'lib/brief.js');
+const briefSource = readFileSync(briefFile, 'utf8');
+const sharedLine = /export const SHARED_AI_URL = '[^']*';/;
+assert.match(briefSource, sharedLine);
+writeFileSync(briefFile, briefSource.replace(sharedLine, `export const SHARED_AI_URL = '${PAGE_URL}v1/chat/completions';`));
 
 const browser = await puppeteer.launch({
   executablePath: BROWSER,
@@ -49,6 +76,7 @@ async function check(name, fn) {
   } catch (error) {
     failed += 1;
     console.log(`FAIL - ${name}\n  ${error.message}`);
+    if (globalThis.__panelStatus) console.log(`  panel said: ${await globalThis.__panelStatus().catch(() => 'nothing')}`);
   }
 }
 
@@ -58,6 +86,11 @@ try {
     { timeout: 15000 },
   );
   const sw = await swTarget.worker();
+  // The worker can be found a moment before its extension APIs are ready.
+  for (let tries = 0; !(await sw.evaluate(() => typeof chrome !== 'undefined' && Boolean(chrome.storage))); tries += 1) {
+    if (tries === 50) throw new Error('The extension never finished starting.');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
   await sw.evaluate(() => chrome.storage.sync.set({ lookChosen: true }));
 
   await check('reads the video frame fixture', async () => {
@@ -120,6 +153,7 @@ try {
     }, name);
   const choicesShown = () => inShadow((root) => !root.querySelector('.choices').hidden);
   const status = () => inShadow((root) => root.querySelector('.status').textContent);
+  globalThis.__panelStatus = status;
   const hostCount = () => page.$$eval('#screen-select-host', (hosts) => hosts.length);
   const waitForTab = (prefix) =>
     browser.waitForTarget((t) => t.url().startsWith(prefix), { timeout: 10000 });
@@ -311,6 +345,114 @@ try {
     const text = await panelText();
     console.log('  read:', JSON.stringify(text));
     assert.match(text, /مرحبا/);
+  });
+
+  await check('a table is read as a table and translated as one', async () => {
+    await reset();
+    await activate();
+    await drag('#prices');
+    const text = await panelText();
+    console.log('  read:', JSON.stringify(text));
+    assert.match(text, /Plan\tPrice\tUsers/);
+    assert.match(text, /Team\t12\t10/);
+    assert.match(await status(), /Found a table: 3 rows, 3 columns/);
+    const original = await inShadow((root) => ({
+      cells: [...root.querySelectorAll('.source table tr')].map((row) => [...row.cells].map((cell) => cell.textContent)),
+      textHidden: root.querySelector('.text').hidden,
+      button: root.querySelector('.edit-text').textContent,
+    }));
+    assert.deepEqual(original, {
+      cells: [['Plan', 'Price', 'Users'], ['Free', '0', '1'], ['Team', '12', '10']],
+      textHidden: true,
+      button: 'Edit as text',
+    });
+    await inShadow((root) => root.querySelector('.edit-text').click());
+    assert.equal(await inShadow((root) => root.querySelector('.text').hidden), false, 'Edit as text shows the text');
+    await inShadow((root) => root.querySelector('.edit-text').click());
+    assert.equal(await inShadow((root) => root.querySelector('.source').hidden), false, 'Show as table goes back');
+    // Google's free service turns tests away at times, so it answers line by line here.
+    await sw.evaluate(() => {
+      globalThis.__realFetch = globalThis.fetch;
+      globalThis.fetch = async (url, init) => {
+        if (!String(url).startsWith('https://translate.googleapis.com/')) return globalThis.__realFetch(url, init);
+        const lines = new URL(url).searchParams.get('q').split('\n');
+        globalThis.__tableRequest = lines;
+        const words = { Plan: 'الخطة', Price: 'السعر', Users: 'المستخدمون', Free: 'مجانية', Team: 'فريق' };
+        return Response.json([[[lines.map((line) => words[line] ?? 'نص').join('\n'), lines.join('\n')]]]);
+      };
+    });
+    await clickButton('translate');
+    await page.waitForFunction(
+      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.translation table'),
+      { timeout: 20000 },
+    );
+    const sent = await sw.evaluate(() => {
+      globalThis.fetch = globalThis.__realFetch;
+      return globalThis.__tableRequest;
+    });
+    assert.deepEqual(sent, ['Plan', 'Price', 'Users', 'Free', 'Team'], 'only cells with words are sent, one per line');
+    const table = await inShadow((root) => {
+      const node = root.querySelector('.translation table');
+      return { dir: node.dir, cells: [...node.rows].map((row) => [...row.cells].map((cell) => cell.textContent)) };
+    });
+    console.log('  translated:', JSON.stringify(table));
+    assert.equal(table.dir, 'rtl');
+    assert.equal(table.cells.length, 3);
+    assert.deepEqual(table.cells.map((row) => row.length), [3, 3, 3]);
+    assert.deepEqual(table.cells[2].slice(1), ['12', '10']);
+    assert.deepEqual(table.cells[0], ['الخطة', 'السعر', 'المستخدمون']);
+    assert.match(await status(), /Translated the table/);
+    if (process.env.TABLE_SHOT) await page.screenshot({ path: process.env.TABLE_SHOT });
+  });
+
+  await check('the panel can be dragged away and stays there', async () => {
+    await reset();
+    await activate();
+    await drag('#english');
+    await panelText();
+    const bar = await inShadow((root) => {
+      const rect = root.querySelector('.titlebar').getBoundingClientRect();
+      return { x: rect.x + 60, y: rect.y + rect.height / 2 };
+    });
+    const before = await inShadow((root) => root.querySelector('.panel').getBoundingClientRect().toJSON());
+    await page.mouse.move(bar.x, bar.y);
+    await page.mouse.down();
+    await page.mouse.move(bar.x + 400, bar.y + 300, { steps: 6 });
+    await page.mouse.up();
+    const after = await inShadow((root) => root.querySelector('.panel').getBoundingClientRect().toJSON());
+    assert.equal(Math.round(after.x - before.x), 400);
+    assert.equal(Math.round(after.y - before.y), 300);
+  });
+
+  await check('the box can be resized to take in more, and is read again', async () => {
+    const panelBefore = await inShadow((root) => root.querySelector('.panel').getBoundingClientRect().toJSON());
+    const corner = await inShadow((root) => {
+      const rect = root.querySelector('.handle[data-edge="se"]').getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    });
+    const arabic = await page.$eval('#arabic', (el) => el.getBoundingClientRect().toJSON());
+    await page.mouse.move(corner.x, corner.y);
+    await page.mouse.down();
+    await page.mouse.move(Math.max(corner.x, arabic.right + 6), arabic.bottom + 6, { steps: 6 });
+    await page.mouse.up();
+    const text = await panelText();
+    assert.match(text, /Perception is the first step/);
+    assert.match(text, /مرحبا/);
+    const panelAfter = await inShadow((root) => root.querySelector('.panel').getBoundingClientRect().toJSON());
+    assert.equal(Math.round(panelAfter.x), Math.round(panelBefore.x), 'a moved panel stays put');
+  });
+
+  await check('the box can be moved by dragging inside it', async () => {
+    const box = await inShadow((root) => root.querySelector('.box').getBoundingClientRect().toJSON());
+    const english = await page.$eval('#english', (el) => el.getBoundingClientRect().toJSON());
+    const ai = await page.$eval('#ai', (el) => el.getBoundingClientRect().toJSON());
+    const start = { x: box.x + box.width / 2, y: box.y + 10 };
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x + (ai.x - english.x), start.y + (ai.y - english.y), { steps: 6 });
+    await page.mouse.up();
+    assert.match(await panelText(), /AI does the work/);
+    await page.keyboard.press('Escape');
   });
 
   await check('reads a playing video and resumes only what it paused', async () => {
@@ -684,9 +826,33 @@ try {
     );
   const clearKey = () => sw.evaluate(() => chrome.storage.local.remove(['apiKey', 'nvidiaKey', 'geminiKey']));
 
-  await check('Brief without a key asks first and opens nothing', async () => {
+  await check('Brief with no key uses the free shared AI', async () => {
     await clearKey();
     await sw.evaluate(() => chrome.storage.sync.remove(['askTarget', 'briefModel']));
+    sharedAi.requests = [];
+    sharedAi.reply = { choices: [{ message: { content: 'A brief from the shared AI.' } }] };
+    await reset();
+    await activate();
+    await drag('#english');
+    await panelText();
+    await clickButton('brief');
+    await page.waitForFunction(
+      () => document.querySelector('#screen-select-host').shadowRoot.querySelector('.brief').textContent.includes('shared AI'),
+      { timeout: 10000 },
+    );
+    sharedAi.reply = null;
+    const [request] = sharedAi.requests;
+    assert.match(request.headers.origin, /^chrome-extension:\/\//);
+    assert.equal(request.headers.authorization, undefined, 'no key is sent from the extension');
+    assert.equal(request.body.stream, true);
+    await page.keyboard.press('Escape');
+  });
+
+  await check('Brief without a key asks first and opens nothing', async () => {
+    await clearKey();
+    // Claude has no shared option, so it still needs a key of your own.
+    await sw.evaluate(() => chrome.storage.sync.remove('askTarget'));
+    await sw.evaluate(() => chrome.storage.sync.set({ briefModel: 'haiku' }));
     await reset();
     await activate();
     await drag('#english');
@@ -697,7 +863,7 @@ try {
       () => !document.querySelector('#screen-select-host').shadowRoot.querySelector('.choices').hidden,
       { timeout: 5000 },
     );
-    assert.match(await inShadow((root) => root.querySelector('.choices').textContent), /no NVIDIA key is saved/);
+    assert.match(await inShadow((root) => root.querySelector('.choices').textContent), /no Claude key is saved/);
     if (process.env.CHOICE_SHOT) await page.screenshot({ path: process.env.CHOICE_SHOT });
     await new Promise((resolve) => setTimeout(resolve, 500));
     assert.equal((await browser.pages()).length, tabsBefore);
@@ -782,8 +948,13 @@ try {
     await options.goto(`chrome-extension://${new URL(sw.url()).host}/options.html`);
     assert.equal(await options.$eval('input[value="nvidia"]', (radio) => radio.checked), true);
     await options.type('#nvidia-key', 'test-key');
+    assert.match(await options.$eval('#nvidia-key-state', (el) => el.textContent), /No key saved yet/);
     await options.click('#save-nvidia-key');
     await new Promise((resolve) => setTimeout(resolve, 300));
+    const state = await options.$eval('#nvidia-key-state', (el) => ({ saved: el.classList.contains('saved'), text: el.textContent }));
+    assert.equal(state.saved, true);
+    assert.match(state.text, /Key saved\. It's ready to use\./);
+    assert.doesNotMatch(state.text, /test-key/, 'the key itself is never shown');
     assert.equal(await sw.evaluate(async () => (await chrome.storage.local.get('nvidiaKey')).nvidiaKey), 'test-key');
     assert.equal(await sw.evaluate(async () => (await chrome.storage.sync.get('nvidiaKey')).nvidiaKey), undefined);
     await options.close();
