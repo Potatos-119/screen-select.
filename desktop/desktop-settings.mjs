@@ -1,4 +1,4 @@
-// Adds a Shortcut box to Settings in the desktop app. Click it, press new keys, then save.
+// Adds the desktop app's own settings: a Shortcut box, and whether it opens when the computer starts.
 import { DEFAULT_SHORTCUT, shortcutFromKeys, shortcutLabel } from './shortcut.mjs';
 
 const { shortcut: saved, isMac, works } = await desktop.getShortcut();
@@ -70,4 +70,24 @@ section.querySelector('#save-shortcut').addEventListener('click', () => save(cho
 reset.addEventListener('click', () => {
   chosen = DEFAULT_SHORTCUT;
   return save(DEFAULT_SHORTCUT);
+});
+
+// It lives in the tray or the menu bar, so opening at sign in keeps the shortcut ready all day.
+const startup = document.createElement('fieldset');
+startup.id = 'startup-setting';
+startup.innerHTML = `
+  <legend>Startup</legend>
+  <label><input type="checkbox" id="open-at-login" /> ${isMac ? 'Open at login' : 'Open when Windows starts'}</label>
+  <small id="open-at-login-status" role="status"></small>
+  <small>It starts quietly in the ${isMac ? 'menu bar' : 'tray'}, ready for your shortcut.</small>`;
+section.after(startup);
+
+const openAtLogin = startup.querySelector('#open-at-login');
+const startupStatus = startup.querySelector('#open-at-login-status');
+openAtLogin.checked = await desktop.opensAtLogin();
+openAtLogin.addEventListener('change', async () => {
+  const wanted = openAtLogin.checked;
+  openAtLogin.checked = await desktop.setOpenAtLogin(wanted);
+  if (openAtLogin.checked === wanted) startupStatus.textContent = 'Saved.';
+  else startupStatus.textContent = isMac ? 'Turn it on in System Settings, General, Login Items.' : 'Turn it on in Task Manager, Startup apps.';
 });

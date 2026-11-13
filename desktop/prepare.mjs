@@ -9,8 +9,8 @@ const optionsPath = 'extension/options.html';
 const options = readFileSync(optionsPath, 'utf8')
   .replace('It is stored only in this browser profile.', 'It is stored only on this computer.')
   .replace('Saved only in this browser, up to', 'Saved only on this computer, up to')
-  // The shortcut setting is only for the desktop app, so it is added here and the extension stays the same.
-  .replace('</body>', '  <script type="module" src="../shortcut-setting.mjs"></script>\n  </body>');
+  // The shortcut and startup settings are only for the desktop app, so they are added here and the extension stays the same.
+  .replace('</body>', '  <script type="module" src="../desktop-settings.mjs"></script>\n  </body>');
 writeFileSync(optionsPath, options);
 
 mkdirSync('bin', { recursive: true });

@@ -22,6 +22,7 @@ import { createChrome } from './chrome-shim.mjs';
 import { DEFAULT_SHORTCUT, shortcutLabel } from './shortcut.mjs';
 import { createStore } from './store.mjs';
 import { createVision } from './vision.mjs';
+import { SHARED_AI_URL } from './extension/lib/brief.js';
 import { fixMisreads, removeLineArt } from './extension/lib/ocr-fixes.js';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
@@ -96,9 +97,14 @@ function serveAppFiles() {
 }
 
 // background.js reads its own fonts through fetch, which Node can't do for this app's address.
+// Node sends no origin, so the free shared AI is told this is Screen Select, as the extension does.
 function fetchAppFilesToo() {
   const webFetch = globalThis.fetch;
-  globalThis.fetch = (url, init) => (String(url).startsWith(PAGE_BASE) ? net.fetch(url, init) : webFetch(url, init));
+  globalThis.fetch = (url, init) => {
+    if (String(url).startsWith(PAGE_BASE)) return net.fetch(url, init);
+    if (String(url) === SHARED_AI_URL) return webFetch(url, { ...init, headers: { ...init?.headers, origin: `${SCHEME}://app` } });
+    return webFetch(url, init);
+  };
 }
 
 function createSecrets() {
@@ -310,6 +316,27 @@ function pauseShortcut(paused) {
   else tryShortcut(shortcut);
 }
 
+// The portable .exe unpacks itself into a temporary folder first, so Windows has to start the .exe people downloaded.
+function loginItem() {
+  if (process.platform !== 'win32') return {};
+  return {
+    name: 'Screen Select',
+    path: process.env.PORTABLE_EXECUTABLE_FILE ?? process.execPath,
+    args: app.isPackaged ? [] : [ROOT],
+  };
+}
+
+// On Windows it can also be turned off in Task Manager, which only executableWillLaunchAtLogin knows about.
+function opensAtLogin() {
+  const settings = app.getLoginItemSettings(loginItem());
+  return settings.executableWillLaunchAtLogin ?? settings.openAtLogin;
+}
+
+function setOpenAtLogin(open) {
+  app.setLoginItemSettings({ openAtLogin: open, ...loginItem() });
+  return opensAtLogin();
+}
+
 function createTray() {
   const icon = nativeImage.createFromPath(join(ROOT, 'extension/icons/icon16.png'));
   // At 125% and 150% scaling Windows draws a bigger tray icon, and the 16px one would look blurry.
@@ -363,6 +390,8 @@ function listenToPages() {
   ipcMain.on('ss-open-privacy', () => shell.openExternal(PRIVACY_SETTINGS));
   ipcMain.handle('ss-shortcut', () => ({ shortcut, isMac: IS_MAC, works: shortcutWorks }));
   ipcMain.handle('ss-shortcut-set', (_event, keys) => changeShortcut(keys));
+  ipcMain.handle('ss-login', () => opensAtLogin());
+  ipcMain.handle('ss-login-set', (_event, open) => setOpenAtLogin(Boolean(open)));
   ipcMain.on('ss-shortcut-pause', (_event, paused) => pauseShortcut(Boolean(paused)));
   ipcMain.on('ss-restart', () => {
     app.relaunch();

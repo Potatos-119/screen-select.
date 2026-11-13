@@ -37,6 +37,14 @@ globalShortcut.register = (keys, callback) => {
   return true;
 };
 
+// Stands in for the real startup list, so the test never changes what opens when this computer starts.
+const login = { openAtLogin: false, saved: [] };
+app.getLoginItemSettings = () => ({ openAtLogin: login.openAtLogin });
+app.setLoginItemSettings = (settings) => {
+  login.saved.push(settings);
+  login.openAtLogin = settings.openAtLogin;
+};
+
 const opened = [];
 shell.openExternal = async (url) => opened.push(url);
 
@@ -151,6 +159,7 @@ app.whenReady().then(async () => {
       const call = requests.at(-1);
       assert.match(call.url, /workers\.dev/);
       assert.equal(call.init.headers.authorization, undefined);
+      assert.equal(call.init.headers.origin, 'screen-select://app');
     });
 
     await check('Add a key opens settings above the selection, and the key is saved safely', async () => {
@@ -239,6 +248,25 @@ app.whenReady().then(async () => {
       await settings.click('#reset-shortcut');
       await settings.waitForFunction(() => document.getElementById('shortcut').value === 'Alt+Shift+D');
       assert.equal(shortcuts.at(-1), 'Alt+Shift+D');
+      BrowserWindow.getAllWindows()
+        .find((item) => item.webContents.getURL().includes('options.html'))
+        .close();
+    });
+
+    await check('Open when the computer starts can be turned on and off', async () => {
+      await page.evaluate(() => chrome.runtime.sendMessage({ type: 'ss-settings' }));
+      const settings = await findPage('options.html');
+      await settings.waitForSelector('#open-at-login');
+      assert.equal(await settings.$eval('#open-at-login', (box) => box.checked), false);
+
+      await settings.click('#open-at-login');
+      await settings.waitForFunction(() => document.getElementById('open-at-login-status').textContent === 'Saved.');
+      assert.equal(login.saved.at(-1).openAtLogin, true);
+      if (process.platform === 'win32') assert.equal(login.saved.at(-1).path, process.execPath);
+
+      await settings.click('#open-at-login');
+      await settings.waitForFunction(() => !document.getElementById('open-at-login').checked);
+      assert.equal(login.saved.at(-1).openAtLogin, false);
       BrowserWindow.getAllWindows()
         .find((item) => item.webContents.getURL().includes('options.html'))
         .close();

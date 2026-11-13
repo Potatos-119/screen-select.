@@ -83,4 +83,6 @@ contextBridge.exposeInMainWorld('desktop', {
   getShortcut: () => ipcRenderer.invoke('ss-shortcut'),
   setShortcut: (keys) => ipcRenderer.invoke('ss-shortcut-set', keys),
   pauseShortcut: (paused) => ipcRenderer.send('ss-shortcut-pause', paused),
+  opensAtLogin: () => ipcRenderer.invoke('ss-login'),
+  setOpenAtLogin: (open) => ipcRenderer.invoke('ss-login-set', open),
 });
