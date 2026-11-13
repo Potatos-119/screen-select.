@@ -8,6 +8,8 @@ export const MAX_TOKENS = 2000;
 export const MAX_BODY_BYTES = 4_000_000;
 const PATH = '/v1/chat/completions';
 const EXTENSION_ORIGIN = /^(chrome-extension|extension):\/\/[a-z]{32}$/;
+// The desktop app sends this from its own pages' address. The limits below still hold for it.
+export const DESKTOP_ORIGIN = 'screen-select://app';
 
 const reply = (status, message) => Response.json({ error: { message } }, { status });
 
@@ -24,6 +26,7 @@ export function cleanBody(body) {
 }
 
 function allowedOrigin(origin, env) {
+  if (origin === DESKTOP_ORIGIN) return true;
   if (!EXTENSION_ORIGIN.test(origin ?? '')) return false;
   const ids = (env.EXTENSION_IDS ?? '').split(',').map((id) => id.trim()).filter(Boolean);
   return ids.length === 0 || ids.some((id) => origin.endsWith(`://${id}`));

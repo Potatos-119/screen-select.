@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import worker, { MAX_TOKENS, MODEL, cleanBody } from '../proxy/worker.js';
+import worker, { DESKTOP_ORIGIN, MAX_TOKENS, MODEL, cleanBody } from '../proxy/worker.js';
 import { buildBriefRequest, buildTranslationRequest, describeBriefError, usesSharedAi } from '../extension/lib/brief.js';
 
 const ORIGIN = `chrome-extension://${'a'.repeat(32)}`;
@@ -60,6 +60,11 @@ test('a request from the extension goes to NVIDIA with the owner key', async () 
 test('websites and other tools are turned away', async () => {
   assert.equal((await call({ messages: MESSAGES }, { origin: 'https://evil.example' })).status, 403);
   assert.equal((await call({ messages: MESSAGES }, { origin: '' })).status, 403);
+});
+
+test('the desktop app is let in, even when extension IDs are set', async () => {
+  const env = { EXTENSION_IDS: 'b'.repeat(32) };
+  assert.equal((await call({ messages: MESSAGES }, { origin: DESKTOP_ORIGIN, env })).status, 503);
 });
 
 test('a list of extension IDs limits it to those', async () => {
