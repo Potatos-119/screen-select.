@@ -105,7 +105,7 @@ Then move `desktop/dist/mac-arm64/Screen Select.app` to Applications and open it
 3. Open **Settings** from the menu bar icon and paste your keys. The desktop app can't see the keys saved in your browser.
 4. Press `Option+Shift+D` and drag a box. `Esc` cancels.
 
-To use other keys, open **Settings**, click the **Shortcut** box and press the keys you want, then click **Save shortcut**.
+To use other keys, open **Settings**, click the **Shortcut** box and press the keys you want, then click **Save shortcut**. To have it ready every time you sign in, turn on **Open at login** in Settings.
 
 The first time it opens, Vision can take about 40 seconds to load in the background. Tesseract reads for you until it's ready. If you rebuild the app, your Mac may ask for Screen Recording again.
 
@@ -127,6 +127,8 @@ It isn't signed by Microsoft, so the first time you open it Windows shows **Wind
 3. Press `Alt+Shift+D` and drag a box. `Esc` cancels.
 
 To use other keys, open **Settings**, click the **Shortcut** box and press the keys you want, then click **Save shortcut**. If another app already uses them, it tells you and keeps the old ones.
+
+To have it start with your computer, turn on **Open when Windows starts** in Settings. This works with the portable `.exe` too, as long as you keep it in the same place.
 
 Keys are encrypted with your Windows account, and your settings and history stay on this computer. The box works on the screen your mouse is on.
 
