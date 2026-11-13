@@ -19,6 +19,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createChrome } from './chrome-shim.mjs';
+import { DEFAULT_SHORTCUT, shortcutLabel } from './shortcut.mjs';
 import { createStore } from './store.mjs';
 import { createVision } from './vision.mjs';
 import { fixMisreads, removeLineArt } from './extension/lib/ocr-fixes.js';
@@ -26,9 +27,9 @@ import { fixMisreads, removeLineArt } from './extension/lib/ocr-fixes.js';
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const SCHEME = 'screen-select';
 const PAGE_BASE = `${SCHEME}://app/`;
-const SHORTCUT = 'Alt+Shift+D';
-const SHORTCUT_LABEL = process.platform === 'darwin' ? 'Option+Shift+D' : 'Alt+Shift+D';
-const ICON_PLACE = process.platform === 'darwin' ? 'menu bar icon' : 'tray icon';
+const IS_MAC = process.platform === 'darwin';
+const ICON_PLACE = IS_MAC ? 'menu bar icon' : 'tray icon';
+const MAX_SHORTCUT_LENGTH = 60;
 const PERMISSION_CHECK_MS = 5000;
 const PRIVACY_SETTINGS = 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture';
 const MIME_TYPES = {
@@ -56,6 +57,9 @@ let textReader = null;
 let settings = null;
 let permission = null;
 let tray = null;
+let storage = null;
+let shortcut = DEFAULT_SHORTCUT;
+let shortcutWorks = false;
 let bridge = null;
 let vision = null;
 let starting = false;
@@ -260,6 +264,52 @@ async function toggleSelection() {
   }
 }
 
+// The menu shows the shortcut, so it is built again when the shortcut changes.
+function updateTray() {
+  const label = shortcutLabel(shortcut, IS_MAC);
+  tray.setToolTip(`Screen Select (${label})`);
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: `Select on screen (${label})`, click: toggleSelection },
+      { label: 'History', click: () => openSettings('#history') },
+      { label: 'Settings', click: () => openSettings('') },
+      { type: 'separator' },
+      { label: 'Quit Screen Select', role: 'quit' },
+    ]),
+  );
+}
+
+// Electron throws on keys it doesn't know, and returns false when another app already has them.
+function tryShortcut(keys) {
+  try {
+    return globalShortcut.register(keys, toggleSelection);
+  } catch {
+    return false;
+  }
+}
+
+// The old keys stay until the new ones work, so there is always a shortcut if one worked before.
+async function changeShortcut(keys) {
+  if (typeof keys !== 'string' || !keys || keys.length > MAX_SHORTCUT_LENGTH) return { error: "Those keys can't be used." };
+  if (keys === shortcut && shortcutWorks) return { shortcut };
+  if (!tryShortcut(keys)) {
+    return { error: `Another app is using ${shortcutLabel(keys, IS_MAC)}, or it can't be used. Try other keys.` };
+  }
+  if (shortcutWorks && keys !== shortcut) globalShortcut.unregister(shortcut);
+  shortcut = keys;
+  shortcutWorks = true;
+  await storage.sync.set({ shortcut });
+  updateTray();
+  return { shortcut };
+}
+
+// While the Settings box waits for new keys, the old ones have to reach it instead of opening the selection.
+function pauseShortcut(paused) {
+  if (!shortcutWorks) return;
+  if (paused) globalShortcut.unregister(shortcut);
+  else tryShortcut(shortcut);
+}
+
 function createTray() {
   const icon = nativeImage.createFromPath(join(ROOT, 'extension/icons/icon16.png'));
   // At 125% and 150% scaling Windows draws a bigger tray icon, and the 16px one would look blurry.
@@ -269,15 +319,7 @@ function createTray() {
     icon.addRepresentation({ scaleFactor, buffer: large.resize({ width: size, height: size, quality: 'best' }).toPNG() });
   }
   tray = new Tray(icon);
-  tray.setToolTip(`Screen Select (${SHORTCUT_LABEL})`);
-  const menu = Menu.buildFromTemplate([
-    { label: `Select on screen (${SHORTCUT_LABEL})`, click: toggleSelection },
-    { label: 'History', click: () => openSettings('#history') },
-    { label: 'Settings', click: () => openSettings('') },
-    { type: 'separator' },
-    { label: 'Quit Screen Select', role: 'quit' },
-  ]);
-  tray.setContextMenu(menu);
+  updateTray();
   // Windows only shows the menu on a right-click, so a left-click on the tray icon opens it too.
   if (process.platform === 'win32') tray.on('click', () => tray.popUpContextMenu());
 }
@@ -319,6 +361,9 @@ function listenToPages() {
     settings?.setAlwaysOnTop(false);
   });
   ipcMain.on('ss-open-privacy', () => shell.openExternal(PRIVACY_SETTINGS));
+  ipcMain.handle('ss-shortcut', () => ({ shortcut, isMac: IS_MAC, works: shortcutWorks }));
+  ipcMain.handle('ss-shortcut-set', (_event, keys) => changeShortcut(keys));
+  ipcMain.on('ss-shortcut-pause', (_event, paused) => pauseShortcut(Boolean(paused)));
   ipcMain.on('ss-restart', () => {
     app.relaunch();
     app.quit();
@@ -330,7 +375,7 @@ async function start() {
   fetchAppFilesToo();
   vision = createVision(app.isPackaged ? join(process.resourcesPath, 'bin') : join(ROOT, 'bin'));
 
-  const storage = createStore({
+  storage = createStore({
     path: join(app.getPath('userData'), 'settings.json'),
     secrets: createSecrets(),
     onChanged(changes, area) {
@@ -343,9 +388,14 @@ async function start() {
 
   listenToPages();
   createOverlay();
+  ({ shortcut } = await storage.sync.get({ shortcut: DEFAULT_SHORTCUT }));
+  shortcutWorks = tryShortcut(shortcut);
   createTray();
-  if (!globalShortcut.register(SHORTCUT, toggleSelection)) {
-    dialog.showErrorBox('Screen Select', `Another app is using ${SHORTCUT_LABEL}. Use the ${ICON_PLACE} instead.`);
+  if (!shortcutWorks) {
+    dialog.showErrorBox(
+      'Screen Select',
+      `Another app is using ${shortcutLabel(shortcut, IS_MAC)}. Use the ${ICON_PLACE}, or pick other keys in Settings.`,
+    );
   }
   if (needsPermission()) {
     await askForPermission();

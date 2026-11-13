@@ -105,6 +105,8 @@ Then move `desktop/dist/mac-arm64/Screen Select.app` to Applications and open it
 3. Open **Settings** from the menu bar icon and paste your keys. The desktop app can't see the keys saved in your browser.
 4. Press `Option+Shift+D` and drag a box. `Esc` cancels.
 
+To use other keys, open **Settings**, click the **Shortcut** box and press the keys you want, then click **Save shortcut**.
+
 The first time it opens, Vision can take about 40 seconds to load in the background. Tesseract reads for you until it's ready. If you rebuild the app, your Mac may ask for Screen Recording again.
 
 Keys are encrypted in your Mac's Keychain, and your settings and history stay on this computer. The box works on the screen your mouse is on.
@@ -123,6 +125,8 @@ It isn't signed by Microsoft, so the first time you open it Windows shows **Wind
 1. It lives in the tray, by the clock. If you can't see it, click the `^` arrow there.
 2. Click the tray icon, open **Settings** and paste your keys. The desktop app can't see the keys saved in your browser. With no key, Brief uses the free shared AI.
 3. Press `Alt+Shift+D` and drag a box. `Esc` cancels.
+
+To use other keys, open **Settings**, click the **Shortcut** box and press the keys you want, then click **Save shortcut**. If another app already uses them, it tells you and keeps the old ones.
 
 Keys are encrypted with your Windows account, and your settings and history stay on this computer. The box works on the screen your mouse is on.
 

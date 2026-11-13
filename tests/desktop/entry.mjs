@@ -27,7 +27,12 @@ desktopCapturer.getSources = async () => [{ display_id: '', thumbnail: screenIma
 systemPreferences.getMediaAccessStatus = () => 'granted';
 
 let pressShortcut;
-globalShortcut.register = (_keys, callback) => {
+const shortcuts = [];
+// These keys act as if another app already has them.
+const TAKEN = 'Ctrl+Shift+T';
+globalShortcut.register = (keys, callback) => {
+  if (keys === TAKEN) return false;
+  shortcuts.push(keys);
   pressShortcut = callback;
   return true;
 };
@@ -199,6 +204,41 @@ app.whenReady().then(async () => {
       const text = await settings.$eval('.history-entry', (entry) => entry.textContent);
       assert.match(text, /perceives/);
       assert.match(text, /An agent acts/);
+      BrowserWindow.getAllWindows()
+        .find((item) => item.webContents.getURL().includes('options.html'))
+        .close();
+    });
+
+    await check('the shortcut can be changed in Settings, and keys in use are refused', async () => {
+      await page.evaluate(() => chrome.runtime.sendMessage({ type: 'ss-settings' }));
+      const settings = await findPage('options.html');
+      await settings.waitForSelector('#shortcut');
+      assert.equal(await settings.$eval('#shortcut', (box) => box.value), 'Alt+Shift+D');
+
+      await settings.click('#shortcut');
+      await settings.keyboard.down('Control');
+      await settings.keyboard.down('Shift');
+      await settings.keyboard.press('KeyT');
+      await settings.keyboard.up('Shift');
+      await settings.keyboard.up('Control');
+      await settings.click('#save-shortcut');
+      await settings.waitForFunction(() => /Another app/.test(document.getElementById('shortcut-status').textContent));
+
+      await settings.click('#shortcut');
+      await settings.keyboard.down('Control');
+      await settings.keyboard.down('Shift');
+      await settings.keyboard.press('KeyQ');
+      await settings.keyboard.up('Shift');
+      await settings.keyboard.up('Control');
+      assert.equal(await settings.$eval('#shortcut', (box) => box.value), 'Ctrl+Shift+Q');
+      await settings.click('#save-shortcut');
+      await settings.waitForFunction(() => document.getElementById('shortcut-status').textContent === 'Saved.');
+      assert.equal(shortcuts.at(-1), 'Ctrl+Shift+Q');
+      assert.match(readFileSync(join(userData, 'settings.json'), 'utf8'), /"shortcut":"Ctrl\+Shift\+Q"/);
+
+      await settings.click('#reset-shortcut');
+      await settings.waitForFunction(() => document.getElementById('shortcut').value === 'Alt+Shift+D');
+      assert.equal(shortcuts.at(-1), 'Alt+Shift+D');
       BrowserWindow.getAllWindows()
         .find((item) => item.webContents.getURL().includes('options.html'))
         .close();

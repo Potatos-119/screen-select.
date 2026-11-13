@@ -80,4 +80,7 @@ contextBridge.exposeInMainWorld('desktop', {
   overlayClosed: () => ipcRenderer.send('ss-overlay-closed'),
   openPrivacySettings: () => ipcRenderer.send('ss-open-privacy'),
   restart: () => ipcRenderer.send('ss-restart'),
+  getShortcut: () => ipcRenderer.invoke('ss-shortcut'),
+  setShortcut: (keys) => ipcRenderer.invoke('ss-shortcut-set', keys),
+  pauseShortcut: (paused) => ipcRenderer.send('ss-shortcut-pause', paused),
 });
