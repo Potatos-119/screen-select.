@@ -31,6 +31,11 @@ const PAGE_BASE = `${SCHEME}://app/`;
 const IS_MAC = process.platform === 'darwin';
 const ICON_PLACE = IS_MAC ? 'menu bar icon' : 'tray icon';
 const MAX_SHORTCUT_LENGTH = 60;
+// Starts at sign in carry this, so they never open a selection.
+const LOGIN_FLAG = '--opened-at-login';
+// A second copy that starts this soon after the first came from the computer starting up, not from a person.
+const STARTUP_QUIET_MS = 30000;
+const startedAt = Date.now();
 const PERMISSION_CHECK_MS = 5000;
 const PRIVACY_SETTINGS = 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture';
 const MIME_TYPES = {
@@ -322,7 +327,7 @@ function loginItem() {
   return {
     name: 'Screen Select',
     path: process.env.PORTABLE_EXECUTABLE_FILE ?? process.execPath,
-    args: app.isPackaged ? [] : [ROOT],
+    args: app.isPackaged ? [LOGIN_FLAG] : [ROOT, LOGIN_FLAG],
   };
 }
 
@@ -435,7 +440,13 @@ async function start() {
 app.dock?.hide();
 // Windows uses this to group the app's windows and notifications under its own name.
 if (process.platform === 'win32') app.setAppUserModelId('com.screenselect.desktop');
-app.on('second-instance', toggleSelection);
+// Opening the app again while it runs opens a selection, but not when sign in starts it twice.
+export function opensSelection(argv, now = Date.now()) {
+  return !argv.includes(LOGIN_FLAG) && now - startedAt >= STARTUP_QUIET_MS;
+}
+app.on('second-instance', (_event, argv) => {
+  if (opensSelection(argv)) toggleSelection();
+});
 app.on('will-quit', () => globalShortcut.unregisterAll());
 // It lives in the menu bar or the tray, so closing the last window doesn't quit.
 app.on('window-all-closed', () => {});

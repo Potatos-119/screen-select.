@@ -17,6 +17,7 @@ setTimeout(() => {
   app.exit(1);
 }, TIME_LIMIT_MS);
 
+const testStart = Date.now();
 const userData = mkdtempSync(join(tmpdir(), 'screen-select-desktop-'));
 app.setPath('userData', userData);
 app.commandLine.appendSwitch('use-mock-keychain');
@@ -126,6 +127,13 @@ app.whenReady().then(async () => {
       await page.mouse.up();
       await waitForPanel((root) => root.querySelector('.text').value.length > 0);
     }
+
+    await check('a second copy at startup does not open a selection', async () => {
+      app.emit('second-instance', {}, [process.execPath]);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      assert.equal(await page.evaluate(() => Boolean(document.querySelector('dialog'))), false);
+      assert.equal(overlayWindow().isVisible(), false);
+    });
 
     await check('the shortcut opens the box and the text is read', async () => {
       await openAndSelect();
@@ -291,6 +299,18 @@ app.whenReady().then(async () => {
       await page.waitForSelector('#screen-select-host');
       await new Promise((resolve) => setTimeout(resolve, 200));
       pressShortcut();
+      await page.waitForFunction(() => !document.querySelector('dialog'));
+    });
+
+    await check('opening the app again later opens a selection, but a start at sign in never does', async () => {
+      const waited = Date.now() - testStart;
+      if (waited < 31000) await new Promise((resolve) => setTimeout(resolve, 31000 - waited));
+      app.emit('second-instance', {}, [process.execPath, '--opened-at-login']);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      assert.equal(await page.evaluate(() => Boolean(document.querySelector('dialog'))), false);
+      app.emit('second-instance', {}, [process.execPath]);
+      await page.waitForSelector('#screen-select-host');
+      await page.keyboard.press('Escape');
       await page.waitForFunction(() => !document.querySelector('dialog'));
     });
 
